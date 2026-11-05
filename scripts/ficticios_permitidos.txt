@@ -1,0 +1,4 @@
+# Números de exemplo amplamente usados em testes (não pertencem a pessoas/empresas reais do projeto)
+529.982.247-25
+11.222.333/0001-81
+11.444.777/0001-61

@@ -1,8 +1,8 @@
+from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 
-from alembic import command
 from ocupabot import db
 from ocupabot.cli import RAIZ
 

@@ -1,4 +1,5 @@
 from alembic import context
+
 from ocupabot import db, modelos  # noqa: F401 - registra as tabelas
 from ocupabot.config import config
 

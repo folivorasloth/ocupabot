@@ -1,0 +1,50 @@
+# Sobe o OcupaBot: painel/API, worker e (opcional) WAHA.
+#   cp .env.example .env   # preencha
+#   docker compose up -d --build
+#   docker compose --profile whatsapp up -d   # inclui o WAHA
+# As portas escutam só em 127.0.0.1: use um proxy com HTTPS para abrir na rede.
+
+x-ocupabot: &ocupabot
+  build: .
+  env_file: .env
+  environment:
+    OCUPABOT_BANCO_URL: sqlite:////app/backend/data/ocupabot.db
+  volumes:
+    - dados:/app/backend/data
+  restart: unless-stopped
+
+services:
+  app:
+    <<: *ocupabot
+    ports:
+      - "127.0.0.1:8000:8000"
+    mem_limit: 384m
+
+  worker:
+    <<: *ocupabot
+    command: ["python", "-m", "ocupabot.worker"]
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    mem_limit: 256m
+
+  waha:
+    image: devlikeapro/waha:latest
+    profiles: ["whatsapp"]
+    environment:
+      WHATSAPP_HOOK_URL: http://app:8000/api/webhook/whatsapp
+      WHATSAPP_HOOK_EVENTS: message
+      WAHA_API_KEY: ${OCUPABOT_WAHA_API_KEY:-}
+      WHATSAPP_HOOK_CUSTOM_HEADERS: "X-Webhook-Token:${OCUPABOT_WEBHOOK_TOKEN:-}"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - waha:/app/.sessions
+    restart: unless-stopped
+    mem_limit: 1g
+
+volumes:
+  dados:
+  waha:
