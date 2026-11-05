@@ -14,7 +14,6 @@ from sqlalchemy import (
     Text,
     Time,
     UniqueConstraint,
-    func,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -35,6 +34,7 @@ from .enums import (
     TipoNotificacao,
     Turno,
 )
+from .relogio import agora
 
 
 def _enum(e):
@@ -57,7 +57,7 @@ class Usuario(ComDatas, Base):
 class Auditoria(Base):
     __tablename__ = "auditoria"
     id: Mapped[int] = mapped_column(primary_key=True)
-    em: Mapped[datetime] = mapped_column(DateTime, server_default=func.current_timestamp(), index=True)
+    em: Mapped[datetime] = mapped_column(DateTime, default=agora, index=True)
     usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
     ator: Mapped[str] = mapped_column(String(40))
     entidade: Mapped[str] = mapped_column(String(40), index=True)
@@ -277,6 +277,7 @@ class Conversa(ComDatas, Base):
     erros_seguidos: Mapped[int] = mapped_column(Integer, default=0)
     motivo_humano: Mapped[str | None] = mapped_column(String(200))
     atendente_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
+    simulada: Mapped[bool] = mapped_column(Boolean, default=False)  # criada pelo simulador do painel
     ultima_entrada_em: Mapped[datetime | None] = mapped_column(DateTime)
 
     contato: Mapped[Contato] = relationship()

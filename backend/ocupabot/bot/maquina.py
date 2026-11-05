@@ -49,6 +49,8 @@ def processar(s: Session, telefone: str, texto: str, id_externo: str | None = No
     """Ponto de entrada: recebe uma mensagem e devolve (e enfileira) as respostas do bot."""
     contato = conversas.contato(s, telefone)
     conv = conversas.conversa_de(s, contato)
+    if simulado:
+        conv.simulada = True
     anterior = conv.ultima_entrada_em
     if conversas.registrar_entrada(s, conv, texto, id_externo) is None:
         return []

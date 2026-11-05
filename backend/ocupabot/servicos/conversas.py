@@ -61,6 +61,7 @@ def registrar_entrada(s: Session, conv: Conversa, texto: str, id_externo: str | 
 
 def enfileirar(s: Session, conv: Conversa, texto: str, autor: Autor = Autor.BOT,
                usuario_id: int | None = None, simulado: bool = False) -> Mensagem:
+    simulado = simulado or conv.simulada
     horas = parametros.inteiro(
         s, "resposta_equipe_validade_horas" if autor == Autor.EQUIPE else "resposta_bot_validade_horas"
     )

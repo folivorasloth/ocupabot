@@ -9,9 +9,11 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import DateTime, create_engine, event, func
+from sqlalchemy import DateTime, create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+
+from .relogio import agora
 
 
 class Base(DeclarativeBase):
@@ -19,10 +21,10 @@ class Base(DeclarativeBase):
 
 
 class ComDatas:
-    criado_em: Mapped[datetime] = mapped_column(DateTime, server_default=func.current_timestamp())
-    atualizado_em: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.current_timestamp(), onupdate=func.current_timestamp()
-    )
+    """Datas no fuso da clínica (o mesmo relógio do resto do sistema)."""
+
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime, default=agora, onupdate=agora)
 
 
 def criar_engine(url: str) -> Engine:
