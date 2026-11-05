@@ -2,11 +2,11 @@
 
 Revision ID: 0001
 Revises: 
-Create Date: 2026-11-05 18:20:21.616580
+Create Date: 2026-11-05 18:31:22.817442
 """
+from alembic import op
 import sqlalchemy as sa
 
-from alembic import op
 
 revision = '0001'
 down_revision = None
@@ -32,8 +32,8 @@ def upgrade() -> None:
     sa.Column('rh_nome', sa.String(length=120), nullable=True),
     sa.Column('rh_telefone', sa.String(length=20), nullable=True),
     sa.Column('ativa', sa.Boolean(), nullable=False),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('empresas', schema=None) as batch_op:
@@ -55,8 +55,8 @@ def upgrade() -> None:
     sa.Column('capacidade_por_hora', sa.Integer(), nullable=True),
     sa.Column('requer_humano', sa.Boolean(), nullable=False),
     sa.Column('ativa', sa.Boolean(), nullable=False),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('codigo')
     )
@@ -86,16 +86,16 @@ def upgrade() -> None:
     sa.Column('chave', sa.String(length=60), nullable=False),
     sa.Column('valor', sa.Text(), nullable=False),
     sa.Column('descricao', sa.Text(), nullable=False),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('chave')
     )
     op.create_table('profissionais',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('nome', sa.String(length=120), nullable=False),
     sa.Column('ativo', sa.Boolean(), nullable=False),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('textos',
@@ -103,8 +103,8 @@ def upgrade() -> None:
     sa.Column('texto', sa.Text(), nullable=False),
     sa.Column('descricao', sa.Text(), nullable=False),
     sa.Column('variaveis', sa.String(length=200), nullable=False),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('chave')
     )
     op.create_table('tipos_aso',
@@ -124,14 +124,14 @@ def upgrade() -> None:
     sa.Column('perfil', sa.Enum('ADMIN', 'SUPERVISAO', 'RECEPCAO', 'LEITURA', name='perfil', native_enum=False, length=30), nullable=False),
     sa.Column('ativo', sa.Boolean(), nullable=False),
     sa.Column('versao_sessao', sa.Integer(), nullable=False),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('login')
     )
     op.create_table('auditoria',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('em', sa.DateTime(), nullable=False),
     sa.Column('usuario_id', sa.Integer(), nullable=True),
     sa.Column('ator', sa.String(length=40), nullable=False),
     sa.Column('entidade', sa.String(length=40), nullable=False),
@@ -154,8 +154,8 @@ def upgrade() -> None:
     sa.Column('tipo', sa.Enum('RH', 'PARTICULAR', 'PACIENTE', 'DESCONHECIDO', name='tipocontato', native_enum=False, length=30), nullable=False),
     sa.Column('empresa_id', sa.Integer(), nullable=True),
     sa.Column('optout_em', sa.DateTime(), nullable=True),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['empresa_id'], ['empresas.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('telefone')
@@ -167,8 +167,8 @@ def upgrade() -> None:
     sa.Column('funcao_id', sa.Integer(), nullable=True),
     sa.Column('ordem', sa.Integer(), nullable=False),
     sa.Column('ativo', sa.Boolean(), nullable=False),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['funcao_id'], ['funcoes.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('codigo')
@@ -181,8 +181,8 @@ def upgrade() -> None:
     sa.Column('data_fim', sa.Date(), nullable=False),
     sa.Column('turno', sa.Enum('MANHA', 'TARDE', name='turno', native_enum=False, length=30), nullable=True),
     sa.Column('motivo', sa.String(length=200), nullable=True),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['profissional_id'], ['profissionais.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -193,8 +193,8 @@ def upgrade() -> None:
     sa.Column('dia_semana', sa.Integer(), nullable=False),
     sa.Column('turno', sa.Enum('MANHA', 'TARDE', name='turno', native_enum=False, length=30), nullable=False),
     sa.Column('confirmada', sa.Boolean(), nullable=False),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['funcao_id'], ['funcoes.id'], ),
     sa.ForeignKeyConstraint(['profissional_id'], ['profissionais.id'], ),
     sa.PrimaryKeyConstraint('id'),
@@ -210,8 +210,8 @@ def upgrade() -> None:
     sa.Column('empresa_id', sa.Integer(), nullable=True),
     sa.Column('setor', sa.String(length=120), nullable=True),
     sa.Column('cargo', sa.String(length=120), nullable=True),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['empresa_id'], ['empresas.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('cpf')
@@ -232,8 +232,8 @@ def upgrade() -> None:
     sa.Column('observacao', sa.Text(), nullable=True),
     sa.Column('no_sistema_externo', sa.Boolean(), nullable=False),
     sa.Column('codigo_externo', sa.String(length=40), nullable=True),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['contato_id'], ['contatos.id'], ),
     sa.ForeignKeyConstraint(['empresa_id'], ['empresas.id'], ),
     sa.ForeignKeyConstraint(['paciente_id'], ['pacientes.id'], ),
@@ -255,9 +255,10 @@ def upgrade() -> None:
     sa.Column('erros_seguidos', sa.Integer(), nullable=False),
     sa.Column('motivo_humano', sa.String(length=200), nullable=True),
     sa.Column('atendente_id', sa.Integer(), nullable=True),
+    sa.Column('simulada', sa.Boolean(), nullable=False),
     sa.Column('ultima_entrada_em', sa.DateTime(), nullable=True),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['atendente_id'], ['usuarios.id'], ),
     sa.ForeignKeyConstraint(['contato_id'], ['contatos.id'], ),
     sa.PrimaryKeyConstraint('id'),
@@ -284,8 +285,8 @@ def upgrade() -> None:
     sa.Column('decidida_por_id', sa.Integer(), nullable=True),
     sa.Column('alterada', sa.Boolean(), nullable=False),
     sa.Column('motivo', sa.String(length=300), nullable=True),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['agendamento_id'], ['agendamentos.id'], ),
     sa.ForeignKeyConstraint(['contato_id'], ['contatos.id'], ),
     sa.ForeignKeyConstraint(['decidida_por_id'], ['usuarios.id'], ),
@@ -326,8 +327,8 @@ def upgrade() -> None:
     sa.Column('enviada_em', sa.DateTime(), nullable=True),
     sa.Column('resposta', sa.String(length=200), nullable=True),
     sa.Column('erro', sa.String(length=300), nullable=True),
-    sa.Column('criado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.Column('atualizado_em', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('criado_em', sa.DateTime(), nullable=False),
+    sa.Column('atualizado_em', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['agendamento_id'], ['agendamentos.id'], ),
     sa.ForeignKeyConstraint(['contato_id'], ['contatos.id'], ),
     sa.PrimaryKeyConstraint('id')
