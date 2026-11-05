@@ -14,7 +14,7 @@ RUN useradd --create-home --uid 1000 ocupabot
 COPY backend/pyproject.toml ./
 COPY backend/ocupabot ./ocupabot
 RUN pip install --no-cache-dir .
-COPY backend/alembic ./alembic
+COPY backend/migracoes ./migracoes
 COPY backend/alembic.ini ./
 COPY --from=painel /painel/dist /app/painel
 RUN mkdir -p /app/backend/data && chown -R ocupabot /app/backend/data

@@ -33,7 +33,7 @@ RAIZ = _raiz()
 
 def migrar() -> None:
     cfg = AlembicConfig(str(RAIZ / "alembic.ini"))
-    cfg.set_main_option("script_location", str(RAIZ / "alembic"))
+    cfg.set_main_option("script_location", str(RAIZ / "migracoes"))
     command.upgrade(cfg, "head")
     with db.sessao() as s:
         essenciais(s)
