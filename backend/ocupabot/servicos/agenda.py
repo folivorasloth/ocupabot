@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..config import config
 from ..dominio.vagas import Indisponibilidade, Ocupacao, Retrato
-from ..enums import STATUS_OCUPAM, Origem, StatusAgendamento, StatusNotificacao, TipoNotificacao
+from ..enums import STATUS_OCUPAM, Origem, StatusAgendamento, StatusNotificacao, TipoNotificacao, Turno
 from ..modelos import (
     Agendamento,
     Contato,
@@ -194,7 +194,7 @@ def criar(
     escolha = escolha or {}
     turno = r.turno_de(data, horario) or ("MANHA" if horario < time(12) else "TARDE")
     ag = Agendamento(paciente_id=paciente_id, empresa_id=empresa_id, contato_id=contato_id,
-                     tipo_aso_id=tipo_aso_id, data=data, horario=horario, turno=turno, status=status,
+                     tipo_aso_id=tipo_aso_id, data=data, horario=horario, turno=Turno(turno), status=status,
                      origem=origem, observacao=observacao)
     exames = s.scalars(select(Exame).where(Exame.id.in_(exame_ids))).all()
     ag.itens = [ItemAgendamento(exame_id=e.id, profissional_id=escolha.get(e.funcao_id)) for e in exames]
