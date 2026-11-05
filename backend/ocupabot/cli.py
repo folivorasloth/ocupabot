@@ -12,9 +12,8 @@ import argparse
 import getpass
 from pathlib import Path
 
-from alembic.config import Config as AlembicConfig
-
 from alembic import command
+from alembic.config import Config as AlembicConfig
 
 from . import db
 from .enums import Perfil
@@ -22,7 +21,14 @@ from .modelos import Usuario
 from .seeds import demonstracao, essenciais
 from .seguranca import hash_senha
 
-RAIZ = Path(__file__).resolve().parent.parent
+
+def _raiz() -> Path:
+    """Pasta com alembic.ini: a do código-fonte ou, instalado como pacote, a pasta atual."""
+    fonte = Path(__file__).resolve().parent.parent
+    return fonte if (fonte / "alembic.ini").exists() else Path.cwd()
+
+
+RAIZ = _raiz()
 
 
 def migrar() -> None:

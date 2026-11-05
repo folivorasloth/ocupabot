@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "ocupabot"
 version = "0.1.0"
 description = "Bot de WhatsApp e painel web para agendamento em clínicas de saúde ocupacional"
-readme = "../README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 dependencies = [
@@ -38,3 +37,6 @@ extend-exclude = ["alembic/versions"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
 ignore = ["B008"]
+
+[tool.ruff.lint.isort]
+known-third-party = ["alembic"]
