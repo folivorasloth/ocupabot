@@ -23,7 +23,7 @@ Dois processos com o mesmo código: **app** (API, webhook e painel estático) e 
 | `backend/ocupabot/integracoes/` | Portas: canal de mensagens e agenda externa (com simulador) |
 | `backend/ocupabot/api/` | Rotas, dependências de acesso e gerador de CRUD com auditoria |
 | `backend/ocupabot/worker.py` | Laço de etapas isoladas com batimento |
-| `backend/alembic/` | Migrations |
+| `backend/migracoes/` | Migrations (Alembic) |
 | `frontend/src/` | Painel React (HashRouter) |
 
 ## Um pedido pelo bot, passo a passo
