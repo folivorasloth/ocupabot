@@ -1,0 +1,37 @@
+# Segredos e configuração local — NUNCA versionar
+.env
+.env.*
+!.env.example
+
+# Bancos de dados, backups e dados reais
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+data/
+dados_reais/
+backup/
+arquivo/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Frontend
+node_modules/
+frontend/dist/
+
+# Editores e SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
