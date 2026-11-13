@@ -13,6 +13,8 @@ from ..modelos import Usuario
 from ..seguranca import ler_token
 
 COOKIE = "ocupabot_sessao"
+# Com a senha dada por outra pessoa (criada ou redefinida pelo admin), só estas rotas respondem
+SO_TROCAR_SENHA = ("/api/auth/eu", "/api/auth/senha", "/api/auth/sair")
 
 
 def sessao() -> Iterator[Session]:
@@ -35,6 +37,8 @@ def usuario_atual(request: Request, s: Session = Depends(sessao)) -> Usuario:
     u = s.get(Usuario, dados[0])
     if u is None or not u.ativo or u.versao_sessao != dados[1]:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "sessão expirada")
+    if u.trocar_senha and request.url.path not in SO_TROCAR_SENHA:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "troque a sua senha para continuar")
     return u
 
 
@@ -52,6 +56,7 @@ def exige(*perfis: Perfil):
 EQUIPE = (Perfil.SUPERVISAO, Perfil.RECEPCAO)
 qualquer = usuario_atual
 equipe = exige(*EQUIPE)
+supervisao = exige(Perfil.SUPERVISAO)
 admin = exige()
 
 
