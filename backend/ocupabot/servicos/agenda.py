@@ -90,12 +90,18 @@ def exames_de_especialista(s: Session, exame_ids: list[int]) -> list[Exame]:
     )
 
 
+def _nao_antes(s: Session, para_bot: bool) -> datetime:
+    """O bot não oferece horário em cima da hora; a equipe pode marcar pelo painel."""
+    minutos = parametros.inteiro(s, "antecedencia_minima_min") if para_bot else 0
+    return agora() + timedelta(minutes=minutos)
+
+
 def livres(s: Session, d: date, exame_ids: list[int], para_bot: bool = False,
            ignorar: set[int] | None = None) -> list[time]:
     funcoes = funcoes_dos_exames(s, exame_ids)
     r = carregar_retrato(s, d, d, ignorar)
     bloquear = para_bot and parametros.ligado(s, "bloquear_horario_externo")
-    return r.livres_no_dia(d, funcoes, nao_antes=agora(), bloquear_externos=bloquear)
+    return r.livres_no_dia(d, funcoes, nao_antes=_nao_antes(s, para_bot), bloquear_externos=bloquear)
 
 
 def proximos_dias(s: Session, exame_ids: list[int], quantos: int, para_bot: bool = True,
@@ -111,7 +117,7 @@ def proximos_dias(s: Session, exame_ids: list[int], quantos: int, para_bot: bool
     saida = []
     d = inicio
     while d <= fim and len(saida) < quantos:
-        hs = r.livres_no_dia(d, funcoes, nao_antes=agora(), bloquear_externos=bloquear)
+        hs = r.livres_no_dia(d, funcoes, nao_antes=_nao_antes(s, para_bot), bloquear_externos=bloquear)
         if hs:
             saida.append((d, hs))
         d += timedelta(days=1)
@@ -120,6 +126,13 @@ def proximos_dias(s: Session, exame_ids: list[int], quantos: int, para_bot: bool
 
 def dentro_do_prazo(s: Session, d: date) -> bool:
     return hoje() <= d <= hoje() + timedelta(days=parametros.inteiro(s, "prazo_maximo_dias"))
+
+
+def conferir_teto(s: Session, d: date) -> None:
+    """A equipe não agenda, remarca nem propõe além de `agenda_max_dias_futuro` (data digitada errada)."""
+    dias = parametros.inteiro(s, "agenda_max_dias_futuro")
+    if d > hoje() + timedelta(days=dias):
+        raise OperacaoInvalida(f"data longe demais: o limite é de {dias} dias à frente")
 
 
 # --- Sistema externo -------------------------------------------------------------------------------
@@ -185,6 +198,9 @@ def criar(
         raise OperacaoInvalida("informe ao menos um exame")
     if datetime.combine(data, horario) <= agora() and not forcar:
         raise VagaIndisponivel("horário no passado")
+    conferir_teto(s, data)
+    if para_bot and datetime.combine(data, horario) <= _nao_antes(s, True):
+        raise VagaIndisponivel("horário em cima da hora")
     funcoes = funcoes_dos_exames(s, exame_ids)
     r = carregar_retrato(s, data, data, ignorar)
     bloquear = para_bot and parametros.ligado(s, "bloquear_horario_externo")
@@ -232,9 +248,15 @@ def cancelar(s: Session, ag: Agendamento, motivo: str, usuario_id: int | None = 
     cancelar_avisos(s, ag.id)
 
 
+def _so_a_partir_do_dia(ag: Agendamento, o_que: str) -> None:
+    if ag.data > hoje():
+        raise OperacaoInvalida(f"{o_que} só pode ser marcada a partir do dia do exame")
+
+
 def presenca(s: Session, ag: Agendamento, usuario_id: int | None = None, ator: str = "sistema") -> None:
     if ag.status not in (StatusAgendamento.AGENDADO, StatusAgendamento.CONFIRMADO, StatusAgendamento.FALTOU):
         raise OperacaoInvalida("status não permite marcar presença")
+    _so_a_partir_do_dia(ag, "presença")
     _mudar_status(s, ag, StatusAgendamento.COMPARECEU, "presenca", usuario_id, ator)
     cancelar_avisos(s, ag.id)
 
@@ -242,6 +264,7 @@ def presenca(s: Session, ag: Agendamento, usuario_id: int | None = None, ator: s
 def falta(s: Session, ag: Agendamento, usuario_id: int | None = None, ator: str = "sistema") -> None:
     if ag.status not in (StatusAgendamento.AGENDADO, StatusAgendamento.CONFIRMADO):
         raise OperacaoInvalida("status não permite marcar falta")
+    _so_a_partir_do_dia(ag, "falta")
     _mudar_status(s, ag, StatusAgendamento.FALTOU, "falta", usuario_id, ator)
     cancelar_avisos(s, ag.id)
     if ag.contato_id:
@@ -273,11 +296,15 @@ def programar_avisos(s: Session, ag: Agendamento, confirmacao: bool = True) -> N
     if confirmacao:
         s.add(Notificacao(tipo=TipoNotificacao.CONFIRMACAO, contato_id=ag.contato_id,
                           agendamento_id=ag.id, enviar_em=agora()))
-    h, m = (int(x) for x in parametros.texto(s, "lembrete_hora").split(":"))
-    quando = datetime.combine(ag.data - timedelta(days=1), time(h, m))
-    if quando > agora():
-        s.add(Notificacao(tipo=TipoNotificacao.LEMBRETE_D1, contato_id=ag.contato_id,
-                          agendamento_id=ag.id, enviar_em=quando))
+    quando = datetime.combine(ag.data - timedelta(days=1), parametros.hora(s, "lembrete_hora"))
+    if quando <= agora():
+        # marcou para amanhã depois da hora do lembrete: sai logo, se ainda não for tarde da noite
+        vespera = ag.data - timedelta(days=1) == hoje()
+        if not (vespera and agora().time() < parametros.hora(s, "lembrete_limite_hora")):
+            return
+        quando = agora()
+    s.add(Notificacao(tipo=TipoNotificacao.LEMBRETE_D1, contato_id=ag.contato_id,
+                      agendamento_id=ag.id, enviar_em=quando))
 
 
 def cancelar_avisos(s: Session, ag_id: int) -> None:
@@ -295,6 +322,8 @@ def afetados_por_excecao(s: Session, ex: Excecao) -> list[Agendamento]:
     )
     saida = []
     for ag in s.scalars(consulta):
+        if agora_passou(ag):  # quem já passou do horário não tem o que remarcar
+            continue
         if ex.turno is not None and ag.turno != ex.turno:
             continue
         if ex.profissional_id is None or any(i.profissional_id == ex.profissional_id for i in ag.itens):
@@ -303,12 +332,21 @@ def afetados_por_excecao(s: Session, ex: Excecao) -> list[Agendamento]:
 
 
 def avisar_remarcacao(s: Session, ags: list[Agendamento]) -> int:
+    """Põe na fila o aviso de remarcação. Quem já foi avisado não recebe de novo, e o lembrete do dia
+    anterior é cancelado (não faz sentido lembrar de um exame que precisa mudar de dia)."""
     n = 0
     for ag in ags:
-        if ag.contato_id:
-            s.add(Notificacao(tipo=TipoNotificacao.REMARCAR, contato_id=ag.contato_id,
-                              agendamento_id=ag.id, enviar_em=agora()))
-            n += 1
+        if not ag.contato_id:
+            continue
+        avisos = list(s.scalars(select(Notificacao).where(Notificacao.agendamento_id == ag.id)))
+        for a in avisos:
+            if a.tipo == TipoNotificacao.LEMBRETE_D1 and a.status == StatusNotificacao.AGENDADA:
+                a.status, a.erro = StatusNotificacao.CANCELADA, "exame precisa ser remarcado"
+        if any(a.tipo == TipoNotificacao.REMARCAR and a.status != StatusNotificacao.CANCELADA for a in avisos):
+            continue
+        s.add(Notificacao(tipo=TipoNotificacao.REMARCAR, contato_id=ag.contato_id,
+                          agendamento_id=ag.id, enviar_em=agora()))
+        n += 1
     return n
 
 

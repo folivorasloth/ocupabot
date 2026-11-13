@@ -9,13 +9,14 @@
 
 ## Como medir
 - Tempo médio da recepção por agendamento, antes e depois.
-- Percentual de pedidos do bot aprovados sem alteração.
+- Percentual de pedidos do bot aprovados sem alteração, e de propostas de horário aceitas (`aprovacoes.status`).
 - Conversas que precisaram da equipe, por motivo (`conversas.motivo_humano`).
 - Taxa de falta com e sem lembrete (`/api/painel/indicadores`).
 
 ## Próximos passos
 1. Gravação automática no sistema externo, com trava por empresa e tratamento de resposta incerta.
-2. Exames por função (GHE/PCMSO): sugerir os exames a partir da empresa, cargo e tipo de ASO.
+2. Exames por função (GHE/PCMSO): sugerir os exames a partir da empresa, cargo e tipo de ASO. O cadastro
+   da empresa já acompanha quem fez o PCMSO e até quando vale.
 3. Convocação de periódicos a vencer.
 4. API oficial do WhatsApp.
 5. Multi-clínica (multi-tenant) com Postgres.

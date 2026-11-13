@@ -8,6 +8,22 @@ from .config import config
 
 _ph = PasswordHasher()
 SESSAO_HORAS = 12
+SENHA_MINIMO = 10
+_COMUNS = {"1234567890", "0123456789", "senha12345", "password123", "qwertyuiop", "admin12345", "mudar12345",
+           "abcdefghij", "senhasenha", "1q2w3e4r5t", "password1234", "qwerty12345", "trocar12345", "senha123456"}
+
+
+def problema_senha(senha: str, login: str | None = None) -> str | None:
+    """None se a senha serve; senão, a explicação para a tela. Vale em criar, trocar e redefinir."""
+    if len(senha) < SENHA_MINIMO:
+        return f"a senha precisa ter ao menos {SENHA_MINIMO} caracteres"
+    if senha.isdigit():
+        return "a senha não pode ter só números"
+    if senha.strip().lower() in _COMUNS:
+        return "essa senha é muito comum; escolha outra"
+    if login and login.strip() and login.strip().lower() in senha.lower():
+        return "a senha não pode conter o login"
+    return None
 
 
 def hash_senha(senha: str) -> str:

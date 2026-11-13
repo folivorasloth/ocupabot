@@ -10,8 +10,12 @@ O bot fala com a interface `Canal` (`integracoes/mensageria.py`), que tem `envia
 
 Entrada: `POST /api/webhook/whatsapp` com o cabeçalho `X-Webhook-Token`. Só eventos `message`, sem grupos nem
 mensagens próprias. Em **modo teste** (padrão), só os números de `OCUPABOT_NUMEROS_TESTE` conversam.
+Mensagem sem texto e com mídia (áudio, foto, arquivo) chega ao bot como "não consigo ouvir áudio".
 
-A saída passa por uma fila (`mensagens` com status `PENDENTE`): o webhook tenta enviar na hora, e o worker
+O webhook só guarda a mensagem; a resposta sai quando o número fica alguns segundos sem escrever
+(veja "Mensagens seguidas" em [BOT.md](BOT.md)).
+
+A saída passa por uma fila (`mensagens` com status `PENDENTE`): o app tenta enviar na hora, e o worker
 reenvia o que falhou até a validade (2 h para o bot, 24 h para a equipe).
 
 ## Sistema de gestão externo

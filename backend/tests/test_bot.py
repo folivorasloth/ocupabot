@@ -34,8 +34,8 @@ def agendar_periodico_rh(f: Fala) -> str:
 def test_rh_agenda_e_pedido_espera_aprovacao():
     f = Fala(TEL_RH)
     r = agendar_periodico_rh(f)
-    # audiometria só seg/ter/qui manhã; quinta 05/11 9h -> próxima vaga ainda hoje 09:10
-    assert "qui 05/11 às 09:10" in r
+    # audiometria só seg/ter/qui manhã; quinta 05/11 9h, com 60 min de antecedência -> hoje às 10:10
+    assert "qui 05/11 às 10:10" in r
     r = f.diz("sim")
     assert "A equipe vai conferir" in r
     with db.sessao() as s:

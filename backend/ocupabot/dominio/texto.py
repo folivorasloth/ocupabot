@@ -17,8 +17,18 @@ def primeiro_nome(nome: str) -> str:
 
 
 def normalizar_telefone(telefone: str) -> str:
-    """Só dígitos, com DDI 55 quando vier no formato nacional."""
-    d = re.sub(r"\D", "", telefone or "")
+    """Só dígitos (ASCII), com DDI 55 quando vier no formato nacional."""
+    d = "".join(str(unicodedata.digit(c)) for c in telefone or "" if c.isdigit())
     if len(d) in (10, 11):
         d = "55" + d
     return d
+
+
+def variantes(telefone: str) -> list[str]:
+    """O mesmo celular brasileiro com e sem o nono dígito: no WhatsApp é a mesma linha."""
+    d = normalizar_telefone(telefone)
+    if d.startswith("55") and len(d) == 13 and d[4] == "9":
+        return [d, d[:4] + d[5:]]
+    if d.startswith("55") and len(d) == 12 and d[4] in "6789":
+        return [d, d[:4] + "9" + d[4:]]
+    return [d]

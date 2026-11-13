@@ -7,7 +7,6 @@ class Perfil(StrEnum):
     ADMIN = "ADMIN"
     SUPERVISAO = "SUPERVISAO"
     RECEPCAO = "RECEPCAO"
-    LEITURA = "LEITURA"
 
 
 class Turno(StrEnum):
@@ -17,9 +16,15 @@ class Turno(StrEnum):
 
 class TipoContato(StrEnum):
     RH = "RH"
+    CREDENCIADORA = "CREDENCIADORA"
+    CONTABILIDADE = "CONTABILIDADE"
     PARTICULAR = "PARTICULAR"
     PACIENTE = "PACIENTE"
     DESCONHECIDO = "DESCONHECIDO"
+
+
+# Quem agenda em nome de empresas (um escritório de contabilidade agenda por várias)
+AGENDA_PELA_EMPRESA = {TipoContato.RH, TipoContato.CREDENCIADORA, TipoContato.CONTABILIDADE}
 
 
 class StatusAgendamento(StrEnum):
@@ -58,6 +63,18 @@ class StatusAprovacao(StrEnum):
     PENDENTE = "PENDENTE"
     APROVADA = "APROVADA"
     RECUSADA = "RECUSADA"
+    AGUARDANDO_CLIENTE = "AGUARDANDO_CLIENTE"  # a equipe propôs outro horário e espera a resposta
+    EXPIRADA = "EXPIRADA"  # a proposta venceu sem resposta
+
+
+APROVACAO_EM_ABERTO = {StatusAprovacao.PENDENTE, StatusAprovacao.AGUARDANDO_CLIENTE}
+
+
+class PcmsoElaboradoPor(StrEnum):
+    """Quem fez o PCMSO da empresa. Vazio no cadastro = não acompanhado."""
+
+    CLINICA = "CLINICA"
+    TERCEIRO = "TERCEIRO"  # outra empresa elaborou: a cliente precisa mandar o documento em vigor
 
 
 class TipoExcecao(StrEnum):
