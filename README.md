@@ -12,16 +12,18 @@ várias fontes. O OcupaBot junta isso num lugar só:
 
 | Peça | O que faz |
 |---|---|
-| **Bot de WhatsApp** | Agenda, remarca e cancela por uma máquina de estados explícita, **sem IA** |
+| **Bot de WhatsApp** | Agenda, remarca e cancela por uma máquina de estados explícita, **sem IA**. Dá para voltar um passo, e várias mensagens seguidas recebem uma resposta só |
 | **Motor de vagas** | Calcula horários livres por expediente, grade, exceções, capacidade e profissionais |
-| **Aprovação humana** | Tudo o que o bot pede espera a equipe, com a vaga segura enquanto isso |
-| **Painel web** | Agenda, aprovações, conversas (assumir/devolver), cadastros, grade, textos do bot e auditoria |
+| **Aprovação humana** | Tudo o que o bot pede espera a equipe, com a vaga segura enquanto isso. Outro horário? A equipe propõe e a pessoa confirma |
+| **Quem agenda** | RH, credenciadora e contabilidade: um contato pode agendar por várias empresas |
+| **Equipe no WhatsApp** | Quem é da equipe marca presença, falta, cancela, remarca e vê a agenda por mensagem, sempre com confirmação |
+| **Painel web** | Hoje em abas, agenda, pedidos do bot, conversas (assumir/devolver), cadastros, PCMSO das empresas, grade, textos do bot e auditoria. Funciona no celular e pode ser instalado na tela de início |
 | **Sistema externo** | A agenda oficial fica atrás de uma interface, com um simulador incluído |
 | **Avisos** | Confirmação, lembrete do dia anterior, falta e remarcação, com uma trava geral |
 
 ## Telas
-Hoje · Agenda · Aprovações · Conversas · Simulador do bot · Cadastros · Grade e exceções · Bot e parâmetros ·
-Usuários · Auditoria
+Hoje · Agenda · Pedidos do bot · Conversas · Testar o bot · Empresas e pacientes (com "Quem agenda") ·
+Grade, folgas e feriados · Mensagens do bot e regras · Usuários · Auditoria
 
 ## Pilha
 Python 3.11+ · FastAPI · SQLAlchemy 2 · Alembic · SQLite (WAL) ou Postgres · React 18 · Vite · Tailwind · Docker
@@ -32,7 +34,7 @@ Python 3.11+ · FastAPI · SQLAlchemy 2 · Alembic · SQLite (WAL) ou Postgres �
 cd backend
 pip install -e ".[dev]"
 python -m pytest                      # testes
-python -m ocupabot.cli demo           # banco fictício (logins: admin, supervisao, recepcao, consulta / senha admin123)
+python -m ocupabot.cli demo           # banco fictício (logins: admin, supervisao, recepcao / senha ocupabot-demo)
 OCUPABOT_SIMULADOR_ATIVO=true uvicorn ocupabot.api.app:app --reload
 python -m ocupabot.worker             # em outro terminal: avisos e fila de envio
 
@@ -58,9 +60,13 @@ Com WhatsApp (WAHA, integração não oficial): `docker compose --profile whatsa
 
 ## Segurança por padrão
 - O bot nasce **desligado**, o WhatsApp nasce em **modo teste** e os envios automáticos nascem **desligados**.
-- CPF e RG são redigidos antes de gravar a mensagem; o WhatsApp nunca leva resultado de exame.
-- Senhas com Argon2, cookie HttpOnly e SameSite, limite de tentativas, perfis conferidos rota a rota.
-- Toda alteração vai para a auditoria. O `.env` e os bancos nunca entram no git (verificado na CI).
+- CPF, RG e nascimento não ficam legíveis no histórico da conversa nem na auditoria; o WhatsApp nunca leva
+  resultado de exame.
+- Senhas com Argon2 e política mínima; senha dada pelo admin é trocada no primeiro acesso. Cookie HttpOnly e
+  SameSite, limite de tentativas, perfis conferidos rota a rota.
+- Toda alteração vai para a auditoria, e também as tentativas de acesso recusadas. O `.env` e os bancos nunca
+  entram no git (verificado na CI).
+- O app não sobe com o WhatsApp ligado se `OCUPABOT_SEGREDO` ainda for o valor de exemplo.
 
 ## Documentação
 | Arquivo | Conteúdo |
