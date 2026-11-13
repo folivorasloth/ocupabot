@@ -4,6 +4,9 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Valores que estão no repositório (padrão do código e .env.example): não servem fora do desenvolvimento
+SEGREDOS_PUBLICOS = {"dev-inseguro-troque", "troque-este-valor"}
+
 
 class Config(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OCUPABOT_", env_file=".env", extra="ignore")

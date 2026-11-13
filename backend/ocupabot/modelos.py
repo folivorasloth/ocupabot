@@ -23,6 +23,7 @@ from .enums import (
     Autor,
     EstadoConversa,
     Origem,
+    PcmsoElaboradoPor,
     Perfil,
     StatusAgendamento,
     StatusAprovacao,
@@ -52,6 +53,9 @@ class Usuario(ComDatas, Base):
     perfil: Mapped[Perfil] = mapped_column(_enum(Perfil))
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
     versao_sessao: Mapped[int] = mapped_column(Integer, default=1)
+    trocar_senha: Mapped[bool] = mapped_column(Boolean, default=False)  # senha dada por outra pessoa
+    # Número de quem é da equipe: mensagens dele podem ser comandos (presença, falta, agenda...)
+    whatsapp: Mapped[str | None] = mapped_column(String(20), unique=True, index=True)
 
 
 class Auditoria(Base):
@@ -96,6 +100,10 @@ class Empresa(ComDatas, Base):
     rh_nome: Mapped[str | None] = mapped_column(String(120))
     rh_telefone: Mapped[str | None] = mapped_column(String(20))
     ativa: Mapped[bool] = mapped_column(Boolean, default=True)
+    # PCMSO: quem fez, até quando vale e se o documento em vigor chegou (vira alerta na tela Hoje)
+    pcmso_elaborado_por: Mapped[PcmsoElaboradoPor | None] = mapped_column(_enum(PcmsoElaboradoPor))
+    pcmso_vence_em: Mapped[date | None] = mapped_column(Date)
+    pcmso_recebido: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class Contato(ComDatas, Base):
@@ -108,6 +116,23 @@ class Contato(ComDatas, Base):
     optout_em: Mapped[datetime | None] = mapped_column(DateTime)
 
     empresa: Mapped[Empresa | None] = relationship()
+    vinculos: Mapped[list["ContatoEmpresa"]] = relationship(cascade="all, delete-orphan")
+
+    @property
+    def empresas_ids(self) -> list[int]:
+        """A principal (empresa_id) primeiro, depois as ligadas, sem repetir."""
+        ids = [self.empresa_id] if self.empresa_id else []
+        return ids + [v.empresa_id for v in self.vinculos if v.empresa_id not in ids]
+
+
+class ContatoEmpresa(Base):
+    """Empresas pelas quais um contato agenda, além da principal (contabilidade, credenciadora...)."""
+
+    __tablename__ = "contato_empresas"
+    contato_id: Mapped[int] = mapped_column(ForeignKey("contatos.id", ondelete="CASCADE"), primary_key=True)
+    empresa_id: Mapped[int] = mapped_column(ForeignKey("empresas.id", ondelete="CASCADE"), primary_key=True,
+                                            index=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=agora)
 
 
 class Paciente(ComDatas, Base):
@@ -258,6 +283,12 @@ class Aprovacao(ComDatas, Base):
     decidida_por_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
     alterada: Mapped[bool] = mapped_column(Boolean, default=False)
     motivo: Mapped[str | None] = mapped_column(String(300))
+    # Proposta de outro horário: quando, até quando vale e quem propôs
+    proposta_em: Mapped[datetime | None] = mapped_column(DateTime)
+    proposta_ate: Mapped[datetime | None] = mapped_column(DateTime)
+    proposta_por_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
+    # O CPF informado ao bot já tinha cadastro com outro nascimento (a conversa seguiu igual)
+    divergencia_cadastro: Mapped[bool] = mapped_column(Boolean, default=False)
 
     agendamento: Mapped[Agendamento] = relationship(foreign_keys=[agendamento_id])
     original: Mapped[Agendamento | None] = relationship(foreign_keys=[original_id])
@@ -279,8 +310,20 @@ class Conversa(ComDatas, Base):
     atendente_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
     simulada: Mapped[bool] = mapped_column(Boolean, default=False)  # criada pelo simulador do painel
     ultima_entrada_em: Mapped[datetime | None] = mapped_column(DateTime)
+    aviso_equipe_em: Mapped[datetime | None] = mapped_column(DateTime)  # já soube que está com a equipe
 
     contato: Mapped[Contato] = relationship()
+
+
+class EntradaPendente(Base):
+    """Mensagem recebida esperando a rajada terminar: várias seguidas viram uma resposta só."""
+
+    __tablename__ = "entradas_pendentes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    telefone: Mapped[str] = mapped_column(String(20), index=True)
+    texto: Mapped[str] = mapped_column(Text)
+    id_externo: Mapped[str | None] = mapped_column(String(120), unique=True)
+    recebida_em: Mapped[datetime] = mapped_column(DateTime)
 
 
 class Mensagem(Base):

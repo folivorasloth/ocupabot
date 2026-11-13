@@ -1,10 +1,12 @@
 """Validação de CPF e CNPJ (dígitos verificadores) e máscaras para exibição."""
 
 import re
+import unicodedata
 
 
 def so_digitos(texto: str) -> str:
-    return re.sub(r"\D", "", texto or "")
+    """Só os dígitos, sempre em ASCII (dígito de largura cheia ou de outro alfabeto vira 0-9)."""
+    return "".join(str(unicodedata.digit(c)) for c in texto or "" if c.isdigit())
 
 
 def _dv(digitos: str, pesos: list[int]) -> int:
@@ -51,11 +53,21 @@ def formatar_cnpj(cnpj: str | None) -> str:
     return f"{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}"
 
 
-_CPF_NO_TEXTO = re.compile(r"(?<!\d)(\d{3}[.\s]?\d{3}[.\s]?\d{3}[-.\s]?\d{2})(?!\d)")
+_SEP = r"[-./\s_]{0,3}"  # a pessoa separa o CPF de qualquer jeito: 123 456 789 09, 123/456/789-09...
+_CPF_NO_TEXTO = re.compile(rf"(?<!\d)(\d{{3}}{_SEP}\d{{3}}{_SEP}\d{{3}}{_SEP}\d{{2}})(?!\d)")
 _RG_NO_TEXTO = re.compile(r"(?<![\d/])(\d{1,2}[.\s]?\d{3}[.\s]?\d{3}[-.\s]?[\dxX])(?![\d/])")
+
+
+def _ascii(texto: str) -> str:
+    return "".join(str(unicodedata.digit(c)) if c.isdigit() and not c.isascii() else c for c in texto or "")
 
 
 def redigir(texto: str) -> str:
     """Troca CPFs e RGs por marcadores antes de gravar a mensagem."""
-    texto = _CPF_NO_TEXTO.sub(lambda m: "[CPF]" if cpf_valido(m.group(1)) else m.group(1), texto)
+    texto = _CPF_NO_TEXTO.sub(lambda m: "[CPF]" if cpf_valido(m.group(1)) else m.group(1), _ascii(texto))
     return _RG_NO_TEXTO.sub("[RG]", texto)
+
+
+def tem_documento(texto: str | None) -> bool:
+    """O texto livre traz CPF ou RG? (observação, motivo e resposta da equipe recusam na entrada)"""
+    return bool(texto) and redigir(texto) != _ascii(texto)
