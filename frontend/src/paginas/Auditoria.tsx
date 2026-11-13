@@ -10,14 +10,14 @@ export default function AuditoriaPagina() {
   const [lista, erro] = useRecurso(() => api.get<Registro[]>(`/auditoria${qs({ entidade })}`), [entidade]);
   return (
     <>
-      <Cabecalho titulo="Auditoria" sub="Toda alteração feita pelo painel, pelo bot ou pelo sistema.">
+      <Cabecalho titulo="Auditoria" sub="Toda alteração feita pelo painel, pelo bot ou pelo sistema, e as tentativas de acesso recusadas. CPF, RG e nascimento aparecem mascarados.">
         <select className="campo w-48" value={entidade} onChange={(e) => setEntidade(e.target.value)}>
-          <option value="">Tudo</option>{["agendamento", "aprovacao", "conversa", "usuario", "parametro", "texto", "grade", "excecao", "empresa", "paciente"].map((x) => <option key={x}>{x}</option>)}
+          <option value="">Tudo</option>{["agendamento", "aprovacao", "conversa", "contato", "usuario", "seguranca", "parametro", "texto", "grade", "excecao", "empresa", "paciente"].map((x) => <option key={x}>{x}</option>)}
         </select>
       </Cabecalho>
       <Erro texto={erro} />
       <div className="cartao">{!lista ? <Carregando /> : lista.length === 0 ? <Vazio texto="Sem registros." /> : (
-        <table className="tabela"><thead><tr><th>Quando</th><th>Quem</th><th>O quê</th><th>Mudança</th></tr></thead>
+        <table className="tabela tabela-cartao"><thead><tr><th>Quando</th><th>Quem</th><th>O quê</th><th>Mudança</th></tr></thead>
           <tbody>{lista.map((r) => (
             <tr key={r.id}>
               <td className="whitespace-nowrap">{dataHora(r.em)}</td>

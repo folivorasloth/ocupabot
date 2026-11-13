@@ -1,0 +1,14 @@
+{
+  "name": "OcupaBot - painel da recepção",
+  "short_name": "OcupaBot",
+  "description": "Agenda, pedidos do bot e conversas da clínica",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f8a67",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
