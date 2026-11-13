@@ -22,6 +22,10 @@ PADROES: dict[str, str] = {
     "Para falar com a equipe, responda ATENDENTE.",
     "optout_reativado": "Pronto, você voltou a receber nossas mensagens. Para parar, mande SAIR.",
     "fluxo_recomecado": "Tudo bem, deixei esse agendamento de lado.",
+    "midia_nao_suportada": "Não consigo ouvir áudio nem abrir arquivos. Escreva sua mensagem, por favor.",
+    "com_a_equipe": "Sua conversa está com a nossa equipe, que responde por aqui ({horario_atendimento}).",
+    "escolher_empresa_do_contato": "Para qual empresa é o exame?\n{opcoes}\nResponda com o número, "
+    "ou 0 se for outra.",
     "perguntar_quem": "O exame é para funcionário de uma empresa ou particular?\n1 - Empresa\n2 - Particular",
     "pedir_cnpj": "Qual o CNPJ da empresa? (Se não souber, mande o nome da empresa.)",
     "cnpj_invalido": "Esse CNPJ não parece válido. Confere e me manda de novo, por favor.",
@@ -61,6 +65,11 @@ PADROES: dict[str, str] = {
     "aguardando_aprovacao": "Recebi o pedido: {paciente}, {data} às {horario}. A equipe vai conferir "
     "e confirmar por aqui em breve.",
     "agendado": "Agendado! {paciente}, {data} às {horario}. {orientacoes}",
+    "proposta_horario": "Não temos o horário que você pediu. Podemos em {data} às {horario}? "
+    "Responda 1 para confirmar ou 2 para outro horário.",
+    "proposta_outro_horario": "Certo, a equipe vai falar com você para combinar outro horário.",
+    "proposta_expirada": "Essa proposta expirou; a equipe vai falar com você.",
+    "proposta_indisponivel": "Esse horário não está mais livre. A equipe vai falar com você para combinar outro.",
     "aprovacao_recusada": "Não conseguimos confirmar o seu pedido. Alguém da equipe vai falar com você por aqui.",
     "cancelamento_confirmado": "Cancelamento confirmado: {paciente}, {data} às {horario}. "
     "Quando quiser marcar outro dia, é só mandar uma mensagem.",
@@ -81,8 +90,15 @@ DESCRICOES = {
     "menu": "Primeira mensagem e menu principal",
     "sugestao": "Oferta do horário livre mais próximo",
     "agendado": "Confirmação depois da aprovação",
-    "confirmacao": "{clinica}: agendamento de {paciente} em {data} às {horario}. {orientacoes}",
+    "confirmacao": "Confirmação de agendamento feito pela equipe no painel",
     "lembrete_d1": "Lembrete enviado no dia anterior",
+    "midia_nao_suportada": "Resposta a áudio, foto, figurinha ou arquivo (o bot só lê texto)",
+    "com_a_equipe": "Aviso, uma vez só, de que a conversa está com a equipe",
+    "escolher_empresa_do_contato": "Contato que agenda por várias empresas escolhe a empresa",
+    "proposta_horario": "A equipe propõe outro horário (só vale quando a pessoa responde 1)",
+    "proposta_outro_horario": "Resposta 2 à proposta (a conversa vai para a equipe)",
+    "proposta_expirada": "Resposta à proposta depois do prazo",
+    "proposta_indisponivel": "Resposta 1 à proposta quando o horário deixou de valer",
 }
 
 
@@ -105,8 +121,10 @@ class _Seguro(dict):
 
 
 def renderizar(modelo: str, **valores) -> str:
+    """Troca só {variavel}: chave solta ou formato estranho no texto editado não derruba o envio."""
     valores.setdefault("clinica", config().nome_clinica)
-    return modelo.format_map(_Seguro({k: "" if v is None else v for k, v in valores.items()})).strip()
+    seguro = _Seguro({k: "" if v is None else str(v) for k, v in valores.items()})
+    return re.sub(r"{(\w+)}", lambda m: seguro[m.group(1)], modelo).strip()
 
 
 def texto(s: Session, chave: str, **valores) -> str:

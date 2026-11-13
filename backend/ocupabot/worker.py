@@ -13,7 +13,7 @@ from .integracoes.agenda_externa import agenda_externa
 from .integracoes.mensageria import canal
 from .modelos import Batimento
 from .relogio import agora
-from .servicos import conversas, externo, notificacoes
+from .servicos import aprovacoes, conversas, externo, notificacoes
 
 log = logging.getLogger("ocupabot.worker")
 
@@ -28,6 +28,7 @@ def _leitura_externa(s: Session) -> object:
 
 ETAPAS: list[tuple[str, Callable[[Session], object]]] = [
     ("agenda_externa", _leitura_externa),
+    ("propostas", aprovacoes.expirar_propostas),
     ("notificacoes", notificacoes.processar),
     ("envios", lambda s: conversas.enviar_pendentes(s, canal())),
 ]

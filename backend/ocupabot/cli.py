@@ -19,7 +19,8 @@ from . import db
 from .enums import Perfil
 from .modelos import Usuario
 from .seeds import demonstracao, essenciais
-from .seguranca import hash_senha
+from .seguranca import SENHA_MINIMO, hash_senha, problema_senha
+from .servicos import auditoria
 
 
 def _raiz() -> Path:
@@ -48,7 +49,7 @@ def main(argv: list[str] | None = None) -> None:
     u.add_argument("--nome", required=True)
     u.add_argument("--perfil", choices=[x.value for x in Perfil], required=True)
     d = sub.add_parser("demo", help="carrega dados fictícios de demonstração")
-    d.add_argument("--senha", default="admin123", help="senha de todos os usuários de demonstração")
+    d.add_argument("--senha", default="ocupabot-demo", help="senha de todos os usuários de demonstração")
     c = sub.add_parser("conversar", help="conversa com o bot no terminal")
     c.add_argument("--telefone", default="5500000000001")
     a = p.parse_args(argv)
@@ -57,17 +58,26 @@ def main(argv: list[str] | None = None) -> None:
         migrar()
         print("banco atualizado")
     elif a.cmd == "usuario":
-        senha = getpass.getpass("senha (mín. 8): ")
-        if len(senha) < 8:
-            raise SystemExit("senha curta demais")
+        login = a.login.strip().lower()  # "Maria" e "maria" seriam duas contas quase iguais
+        senha = getpass.getpass(f"senha (mín. {SENHA_MINIMO}): ")
+        problema = problema_senha(senha, login)  # a mesma regra do painel
+        if not login or problema:
+            raise SystemExit(problema or "login vazio")
+        if senha != getpass.getpass("repita a senha: "):
+            raise SystemExit("as senhas não conferem")
         with db.sessao() as s:
-            s.add(Usuario(login=a.login.lower(), nome=a.nome, perfil=Perfil(a.perfil), senha_hash=hash_senha(senha)))
+            if s.query(Usuario).filter(Usuario.login == login).first():
+                raise SystemExit("login já existe")
+            u = Usuario(login=login, nome=a.nome, perfil=Perfil(a.perfil), senha_hash=hash_senha(senha))
+            s.add(u)
+            s.flush()
+            auditoria.registrar(s, "usuario", u.id, "criar", None, auditoria.foto(u), ator="linha_de_comando")
         print("usuário criado")
     elif a.cmd == "demo":
         migrar()
         with db.sessao() as s:
             demonstracao(s, a.senha)
-        print("demonstração carregada: logins admin, supervisao, recepcao, consulta")
+        print("demonstração carregada: logins admin, supervisao, recepcao")
     elif a.cmd == "conversar":
         from .bot.maquina import processar
 

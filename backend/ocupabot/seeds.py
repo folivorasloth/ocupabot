@@ -8,9 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .dominio.documentos import _dv
-from .enums import Perfil, TipoContato, Turno
+from .enums import PcmsoElaboradoPor, Perfil, TipoContato, Turno
 from .modelos import (
     Contato,
+    ContatoEmpresa,
     Empresa,
     Exame,
     Expediente,
@@ -85,8 +86,8 @@ def essenciais(s: Session) -> None:
     s.flush()
 
 
-def demonstracao(s: Session, senha_admin: str = "admin123") -> None:
-    """Cenário fictício: 3 profissionais, 2 empresas, usuários de cada perfil."""
+def demonstracao(s: Session, senha_admin: str = "ocupabot-demo") -> None:
+    """Cenário fictício: 3 profissionais, 3 empresas, um RH, uma contabilidade e usuários de cada perfil."""
     essenciais(s)
     if s.scalar(select(Profissional.id).limit(1)):
         return
@@ -110,14 +111,18 @@ def demonstracao(s: Session, senha_admin: str = "admin123") -> None:
                    cnpj=gerar_cnpj("112223330001"), usa_sistema_externo=True, codigo_externo="1001")
     beta = Empresa(razao_social="Beta Serviços Inventados S.A.", nome_fantasia="Beta Inventada",
                    cnpj=gerar_cnpj("445556660001"))
-    s.add_all([alfa, beta])
+    gama = Empresa(razao_social="Gama Comércio Imaginário Ltda", nome_fantasia="Gama Imaginária",
+                   cnpj=gerar_cnpj("778889990001"), pcmso_elaborado_por=PcmsoElaboradoPor.TERCEIRO)
+    s.add_all([alfa, beta, gama])
     s.flush()
     s.add(Contato(telefone="5511900000001", nome="RH Alfa (fictício)", tipo=TipoContato.RH, empresa_id=alfa.id))
+    # um escritório de contabilidade agenda por duas empresas: o bot pergunta para qual é o exame
+    s.add(Contato(telefone="5511900000002", nome="Contabilidade Fictícia", tipo=TipoContato.CONTABILIDADE,
+                  empresa_id=beta.id, vinculos=[ContatoEmpresa(empresa_id=gama.id)]))
     for login, nome, perfil in [
         ("admin", "Administração", Perfil.ADMIN),
         ("supervisao", "Supervisão", Perfil.SUPERVISAO),
         ("recepcao", "Recepção", Perfil.RECEPCAO),
-        ("consulta", "Consulta", Perfil.LEITURA),
     ]:
         if not s.scalar(select(Usuario).where(Usuario.login == login)):
             s.add(Usuario(login=login, nome=nome, perfil=perfil, senha_hash=hash_senha(senha_admin)))

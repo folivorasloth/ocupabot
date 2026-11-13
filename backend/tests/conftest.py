@@ -3,6 +3,7 @@ from datetime import datetime
 import pytest
 
 from ocupabot import db, relogio
+from ocupabot.api.rotas import acesso
 from ocupabot.config import config
 from ocupabot.db import Base
 from ocupabot.integracoes.mensageria import CanalConsole, definir_canal
@@ -25,6 +26,7 @@ def ambiente(tmp_path, monkeypatch):
     with db.sessao() as s:
         demonstracao(s, senha_admin="senha-teste")
     relogio.fixar(AGORA)
+    acesso._tentativas.clear()  # o limite de login fica em memória: um teste não bloqueia o outro
     canal = CanalConsole()
     definir_canal(canal)
     yield canal

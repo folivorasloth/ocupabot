@@ -47,15 +47,97 @@ def test_aprovar_avisa_e_programa_lembrete(ambiente):
     assert any("Agendado!" in t for _, t in ambiente.enviadas)
 
 
-def test_aprovar_com_alteracao(ambiente):
+def _propor(d=date(2026, 11, 12), h=time(9, 0)):
+    with db.sessao() as s:
+        ap = s.scalar(select(Aprovacao))
+        pedido_id = ap.agendamento_id
+        aprovacoes.propor(s, ap, ADMIN, Perfil.RECEPCAO, d, h)
+        assert ap.status == StatusAprovacao.AGUARDANDO_CLIENTE and ap.alterada
+        assert s.get(Agendamento, pedido_id).status == StatusAgendamento.CANCELADO  # a vaga pedida foi liberada
+        assert ap.agendamento.status == StatusAgendamento.AGUARDANDO_APROVACAO  # a proposta segura a vaga
+        assert h not in agenda.livres(s, d, [i.exame_id for i in ap.agendamento.itens])
+
+
+def test_proposta_confirmada_pelo_cliente(ambiente):
+    f = _pedido()
+    _propor()
+    rodada()
+    assert any("Podemos em qui 12/11 às 09:00" in t for _, t in ambiente.enviadas)
+    assert "não entendi" in f.diz("talvez")
+    assert "Agendado! Paciente, qui 12/11 às 09:00" in f.diz("1")
+    with db.sessao() as s:
+        ap = s.scalar(select(Aprovacao))
+        assert ap.status == StatusAprovacao.APROVADA and ap.decidida_por_id == ADMIN
+        assert ap.agendamento.status == StatusAgendamento.AGENDADO
+        assert s.scalar(select(Notificacao).where(Notificacao.tipo == TipoNotificacao.LEMBRETE_D1))
+    assert "1 - Agendar" in f.diz("oi")  # a conversa voltou ao normal
+
+
+def test_proposta_recusada_pelo_cliente_libera_a_vaga():
+    f = _pedido()
+    _propor()
+    assert "combinar outro horário" in f.diz("2")
+    with db.sessao() as s:
+        ap = s.scalar(select(Aprovacao))
+        assert ap.status == StatusAprovacao.RECUSADA
+        assert ap.agendamento.status == StatusAgendamento.CANCELADO
+        assert s.scalar(select(Conversa)).estado == EstadoConversa.AGUARDANDO_HUMANO
+
+
+def test_proposta_vence_sem_resposta(ambiente):
+    f = _pedido()
+    _propor()
+    relogio.fixar(datetime(2026, 11, 6, 9, 30))  # mais de 24 h depois
+    assert rodada()["propostas"] == "1"
+    with db.sessao() as s:
+        ap = s.scalar(select(Aprovacao))
+        assert ap.status == StatusAprovacao.EXPIRADA and ap.agendamento.status == StatusAgendamento.CANCELADO
+        assert s.scalar(select(Conversa)).estado == EstadoConversa.AGUARDANDO_HUMANO
+    assert not any("expirou" in t for _, t in ambiente.enviadas)  # nada sai sozinho para a pessoa
+    assert "está com a nossa equipe" in f.diz("1")  # avisa uma vez
+    assert f.diz("oi?") == ""
+    relogio.fixar(datetime(2026, 11, 5, 9, 0))
+
+
+def test_proposta_que_deixou_de_valer_e_cancelada_pela_equipe():
+    f = _pedido()
+    _propor()
+    with db.sessao() as s:  # a fono entra de férias no dia proposto
+        from ocupabot.enums import TipoExcecao
+        from ocupabot.modelos import Excecao, Profissional
+
+        fono = s.scalar(select(Profissional).where(Profissional.nome.like("Fono%")))
+        s.add(Excecao(profissional_id=fono.id, tipo=TipoExcecao.FERIAS, data_inicio=date(2026, 11, 12),
+                      data_fim=date(2026, 11, 12)))
+    assert "não está mais livre" in f.diz("sim")
+    with db.sessao() as s:
+        assert s.scalar(select(Aprovacao)).status == StatusAprovacao.RECUSADA
+
+
+def test_propor_tem_regras():
     _pedido()
     with db.sessao() as s:
         ap = s.scalar(select(Aprovacao))
-        novo = aprovacoes.aprovar(s, ap, ADMIN, Perfil.RECEPCAO, nova_data=date(2026, 11, 12),
-                                  novo_horario=time(9, 0))
-        assert novo.data == date(2026, 11, 12) and ap.alterada
-        assert ap.agendamento.status == StatusAgendamento.CANCELADO
-        assert s.scalar(select(Notificacao).where(Notificacao.tipo == TipoNotificacao.LEMBRETE_D1))
+        with pytest.raises(agenda.OperacaoInvalida):  # o mesmo horário do pedido: é só aprovar
+            aprovacoes.propor(s, ap, ADMIN, Perfil.RECEPCAO, ap.agendamento.data, ap.agendamento.horario)
+        with pytest.raises(agenda.OperacaoInvalida):  # menos de 2 h: não dá tempo de responder
+            aprovacoes.propor(s, ap, ADMIN, Perfil.RECEPCAO, date(2026, 11, 5), time(10, 40))
+        with pytest.raises(agenda.VagaIndisponivel):  # quarta não tem audiometria
+            aprovacoes.propor(s, ap, ADMIN, Perfil.RECEPCAO, date(2026, 11, 11), time(9, 0))
+        aprovacoes.propor(s, ap, ADMIN, Perfil.RECEPCAO, date(2026, 11, 12), time(9, 0))
+        aprovacoes.cancelar_proposta(s, ap, ADMIN)
+        assert ap.status == StatusAprovacao.RECUSADA and ap.agendamento.status == StatusAgendamento.CANCELADO
+
+
+def test_cancelamento_nao_e_aprovado_depois_que_o_agendamento_mudou():
+    with db.sessao() as s:
+        ag = _agendamento_painel(s)
+        ap = aprovacoes.pedir(s, TipoAprovacao.CANCELAMENTO, ag)
+        agenda.cancelar(s, ag, "a equipe já cancelou por telefone")
+        with pytest.raises(agenda.OperacaoInvalida):
+            aprovacoes.aprovar(s, ap, ADMIN, Perfil.RECEPCAO)
+        aprovacoes.recusar(s, ap, ADMIN)  # o motivo é opcional
+        assert ap.status == StatusAprovacao.RECUSADA
 
 
 def test_recusar_libera_vaga_e_passa_para_equipe():

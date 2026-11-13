@@ -13,15 +13,22 @@ from ..config import config
 from ..dominio.documentos import redigir
 from ..enums import Autor, EstadoConversa, StatusEnvio
 from ..integracoes.mensageria import Canal, ErroEnvio
-from ..modelos import Contato, Conversa, Mensagem
+from ..modelos import Contato, Conversa, EntradaPendente, Mensagem
 from ..relogio import agora
-from . import auditoria, parametros
+from . import auditoria, contatos, parametros
 
 log = logging.getLogger("ocupabot.conversas")
 
+# Mensagem sem texto (áudio, foto, figurinha, arquivo) chega ao bot como esta marca
+MIDIA = "[mídia]"
+
+
+class SemDestinatario(Exception):
+    """A mensagem não chegaria a ninguém (a pessoa pediu SAIR)."""
+
 
 def contato(s: Session, telefone: str) -> Contato:
-    c = s.scalar(select(Contato).where(Contato.telefone == telefone))
+    c = contatos.por_telefone(s, telefone)
     if c is None:
         c = Contato(telefone=telefone)
         s.add(c)
@@ -39,14 +46,16 @@ def conversa_de(s: Session, c: Contato) -> Conversa:
 
 
 def ja_recebida(s: Session, id_externo: str | None) -> bool:
-    return bool(id_externo) and s.scalar(
-        select(Mensagem.id).where(Mensagem.id_externo == id_externo)
-    ) is not None
+    """Mesmo id do WhatsApp já processado ou esperando na rajada: não conta de novo."""
+    if not id_externo:
+        return False
+    return (s.scalar(select(Mensagem.id).where(Mensagem.id_externo == id_externo)) is not None
+            or s.scalar(select(EntradaPendente.id).where(EntradaPendente.id_externo == id_externo)) is not None)
 
 
 def registrar_entrada(s: Session, conv: Conversa, texto: str, id_externo: str | None = None) -> Mensagem | None:
     """Grava a mensagem recebida (com CPF/RG redigidos). None se for repetida."""
-    if ja_recebida(s, id_externo):
+    if id_externo and s.scalar(select(Mensagem.id).where(Mensagem.id_externo == id_externo)) is not None:
         return None
     m = Mensagem(conversa_id=conv.id, autor=Autor.CONTATO, texto=redigir(texto)[:4000],
                  id_externo=id_externo, status=StatusEnvio.RECEBIDA, em=agora())
@@ -90,9 +99,14 @@ def enviar_mensagem(s: Session, m: Mensagem, canal: Canal) -> None:
         m.status = StatusEnvio.BLOQUEADA
         m.erro = "modo teste: número fora da lista"
         return
+    if conv.contato.optout_em is not None and m.autor != Autor.BOT:
+        # o bot ainda responde a quem escreve (confirma o SAIR, oferece a volta); aviso e equipe, não
+        m.status = StatusEnvio.BLOQUEADA
+        m.erro = "a pessoa pediu SAIR"
+        return
     m.tentativas += 1
     try:
-        m.id_externo = canal.enviar(tel, m.texto) or None
+        m.id_externo = (canal.enviar(tel, m.texto) or "")[:120] or None
         m.status = StatusEnvio.ENVIADA
         m.erro = None
     except ErroEnvio as e:
@@ -111,12 +125,14 @@ def enviar_pendentes(s: Session, canal: Canal, limite: int = 30) -> int:
 
 # --- Humano no circuito ----------------------------------------------------------------------------
 
-def passar_para_equipe(s: Session, conv: Conversa, motivo: str) -> None:
+def passar_para_equipe(s: Session, conv: Conversa, motivo: str, avisado: bool = False) -> None:
+    """`avisado`: a pessoa já recebeu uma mensagem dizendo que a equipe vai continuar."""
     conv.estado = EstadoConversa.AGUARDANDO_HUMANO
     conv.motivo_humano = motivo[:200]
     conv.fluxo = conv.etapa = None
     conv.dados = {}
     conv.erros_seguidos = 0
+    conv.aviso_equipe_em = agora() if avisado else None
 
 
 def assumir(s: Session, conv: Conversa, usuario_id: int) -> None:
@@ -134,10 +150,13 @@ def devolver(s: Session, conv: Conversa, usuario_id: int) -> None:
     conv.fluxo = conv.etapa = None
     conv.dados = {}
     conv.erros_seguidos = 0
+    conv.aviso_equipe_em = None
     auditoria.registrar(s, "conversa", conv.id, "devolver", antes, auditoria.foto(conv), usuario_id, "painel")
 
 
 def responder(s: Session, conv: Conversa, texto: str, usuario_id: int) -> Mensagem:
+    if conv.contato.optout_em is not None and not conv.simulada:
+        raise SemDestinatario("esta pessoa pediu SAIR: a mensagem não seria entregue. Combine por telefone.")
     if conv.estado != EstadoConversa.HUMANO:
         assumir(s, conv, usuario_id)
     m = enfileirar(s, conv, texto.strip()[:4000], Autor.EQUIPE, usuario_id)
