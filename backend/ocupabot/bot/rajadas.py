@@ -31,6 +31,7 @@ from ..integracoes.mensageria import canal
 from ..modelos import EntradaPendente
 from ..relogio import agora
 from ..servicos import conversas, parametros, textos
+from . import intencoes as it
 from . import maquina
 
 log = logging.getLogger("ocupabot.rajadas")
@@ -56,6 +57,11 @@ def responder(s: Session, telefone: str, entradas: list[tuple[str, str | None]])
     conv = None
     midia_sem_resposta = False
     for texto, id_externo in entradas:
+        if final and (it.eh_sim(texto) or it.eh_nao(texto)):
+            # "ok" na mesma rajada da mensagem que gerou a pergunta: a pessoa ainda não viu o que confirmaria
+            conv = conversas.conversa_de(s, conversas.contato(s, telefone))
+            maquina.registrar(s, conv, texto.strip(), id_externo)
+            continue
         ponto = s.begin_nested()
         bot = maquina.atender(s, telefone, texto, id_externo, gravar_saida=False)
         if bot is None:  # repetida

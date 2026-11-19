@@ -2,15 +2,16 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from ...dominio.documentos import cpf_valido, mascarar_cpf, so_digitos
-from ...dominio.texto import normalizar_telefone
+from ...dominio.texto import normalizar, normalizar_telefone
 from ...enums import APROVACAO_EM_ABERTO, Origem, Perfil, StatusAgendamento
-from ...modelos import Agendamento, Aprovacao, ItemAgendamento, Paciente, Usuario
+from ...modelos import Agendamento, Aprovacao, Empresa, ItemAgendamento, Paciente, Usuario
 from ...relogio import hoje
 from ...servicos import agenda, aprovacoes, auditoria, conversas
-from ..deps import equipe, qualquer, sessao
+from ..deps import equipe, qualquer, sessao, supervisao
 from ..esquemas import AgendamentoNovo, Motivo, Remarcar
 
 r = APIRouter(tags=["agenda"])
@@ -39,6 +40,7 @@ def resumo(ag: Agendamento) -> dict:
         "motivo_cancelamento": ag.motivo_cancelamento,
         "observacao": ag.observacao,
         "no_sistema_externo": ag.no_sistema_externo,
+        "teste": ag.teste,
     }
 
 
@@ -102,8 +104,26 @@ def criar(dados: AgendamentoNovo, s: Session = Depends(sessao), u: Usuario = Dep
                            empresa_id=dados.empresa_id)
             s.add(pac)
             s.flush()
+    # Paciente cujo nome começa com TESTE: ocupa a vaga, mas não manda WhatsApp nem conta nos números
+    teste = normalizar(pac.nome).split()[:1] == ["teste"]
+    if teste and u.perfil not in (Perfil.ADMIN, Perfil.SUPERVISAO):
+        raise HTTPException(403, "agendamento de teste é só com a Supervisão")
+    empresa = s.get(Empresa, dados.empresa_id or pac.empresa_id or 0)
+    if empresa is not None and empresa.usa_sistema_externo and not pac.cpf and not teste:
+        # o sistema externo acha o funcionário pelo CPF: sem ele, o agendamento não tem como ser lançado lá
+        cpf = so_digitos(dados.paciente_cpf or "")
+        if not cpf_valido(cpf):
+            raise HTTPException(422, "esta empresa é lançada no sistema externo, que acha o funcionário pelo "
+                                     "CPF: informe o CPF do paciente")
+        antes = auditoria.foto(pac)
+        pac.cpf = cpf
+        try:
+            s.flush()
+        except IntegrityError as e:
+            raise HTTPException(409, "esse CPF já é de outro paciente: busque por ele") from e
+        auditoria.registrar(s, "paciente", pac.id, "alterar", antes, auditoria.foto(pac), u.id, "painel")
     contato_id = None
-    if dados.contato_telefone:
+    if dados.contato_telefone and not teste:
         telefone = normalizar_telefone(dados.contato_telefone)
         if not 12 <= len(telefone) <= 13:
             raise HTTPException(422, "telefone incompleto: informe DDD e número")
@@ -112,7 +132,7 @@ def criar(dados: AgendamentoNovo, s: Session = Depends(sessao), u: Usuario = Dep
         s, paciente_id=pac.id, exame_ids=dados.exame_ids, data=dados.data, horario=dados.horario,
         origem=Origem.PAINEL, empresa_id=dados.empresa_id or pac.empresa_id, contato_id=contato_id,
         tipo_aso_id=dados.tipo_aso_id, observacao=dados.observacao, forcar=dados.forcar,
-        usuario_id=u.id, ator="painel",
+        usuario_id=u.id, ator="painel", teste=teste,
     ))
     return resumo(_alvo(s, ag.id))
 
@@ -125,8 +145,15 @@ def _alvo(s: Session, ag_id: int) -> Agendamento:
 
 
 def _exige_supervisao_externo(ag: Agendamento, u: Usuario) -> None:
-    if ag.no_sistema_externo and u.perfil not in (Perfil.ADMIN, Perfil.SUPERVISAO):
-        raise HTTPException(403, "este agendamento já está no sistema externo: só a Supervisão altera")
+    if ag.no_sistema_externo and not u.mexe_no_externo():
+        raise HTTPException(403, "este agendamento já está no sistema externo: só a Supervisão (ou quem ela "
+                                 "liberou) altera")
+
+
+@r.delete("/agendamentos/{ag_id}/teste", status_code=204, summary="Apaga um agendamento de teste")
+def apagar_teste(ag_id: int, s: Session = Depends(sessao), u: Usuario = Depends(supervisao)):
+    ag = _alvo(s, ag_id)
+    _executar(lambda: agenda.apagar_teste(s, ag, u.id))
 
 
 @r.post("/agendamentos/{ag_id}/cancelar")
@@ -163,13 +190,23 @@ def falta(ag_id: int, s: Session = Depends(sessao), u: Usuario = Depends(equipe)
 def externo(ag_id: int, lancado: bool = True, codigo: str | None = None, s: Session = Depends(sessao),
             u: Usuario = Depends(equipe)):
     ag = _alvo(s, ag_id)
-    if not lancado and ag.no_sistema_externo and u.perfil not in (Perfil.ADMIN, Perfil.SUPERVISAO):
+    if not lancado and ag.no_sistema_externo and not u.mexe_no_externo():
         raise HTTPException(403, "só a Supervisão desmarca o que já foi lançado no sistema externo")
     antes = auditoria.foto(ag)
     ag.no_sistema_externo = lancado
     ag.codigo_externo = codigo[:40] if lancado and codigo else None
     auditoria.registrar(s, "agendamento", ag.id, "externo", antes, auditoria.foto(ag), u.id, "painel")
     return resumo(ag)
+
+
+@r.get("/agenda/exames", summary="Quantos de cada exame em cada dia e turno do período")
+def exames_no_periodo(de: date | None = None, ate: date | None = None, s: Session = Depends(sessao),
+                      _: Usuario = Depends(qualquer)):
+    de = de or hoje()
+    ate = ate or de
+    if not 0 <= (ate - de).days <= 62:
+        raise HTTPException(422, "período máximo de 62 dias")
+    return agenda.exames_no_periodo(s, de, ate)
 
 
 @r.get("/vagas", summary="Horários livres numa data (várias funções = todas livres ao mesmo tempo)")

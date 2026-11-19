@@ -25,7 +25,30 @@ def por_telefone(s: Session, telefone: str | None) -> Contato | None:
 
 
 def agenda_pela_empresa(c: Contato | None) -> bool:
-    return c is not None and c.tipo in AGENDA_PELA_EMPRESA
+    """Contato desativado é tratado como um número qualquer: o bot volta a perguntar a empresa."""
+    return c is not None and c.ativo and c.tipo in AGENDA_PELA_EMPRESA
+
+
+class Desativado(Exception):
+    pass
+
+
+def da_empresa(s: Session, empresa: Empresa, telefone: str, nome: str | None, tipo: TipoContato,
+               usuario_id: int | None = None) -> Contato:
+    """Cadastra pela empresa quem agenda por ela: número novo cria o contato já ligado; número que já
+    existe só liga. Contato desativado é recusado (reative antes)."""
+    c = por_telefone(s, telefone)
+    if c is None:
+        c = Contato(telefone=telefone, nome=nome or None)
+        s.add(c)
+        s.flush()
+        auditoria.registrar(s, "contato", c.id, "criar_pela_empresa", None, auditoria.foto(c), usuario_id, "painel")
+    elif not c.ativo:
+        raise Desativado("este número está desativado: reative o contato antes de ligar a uma empresa")
+    elif nome and not c.nome:
+        c.nome = nome
+    vincular(s, c, empresa, usuario_id, tipo)
+    return c
 
 
 def empresas_do_contato(s: Session, c: Contato) -> list[Empresa]:

@@ -95,5 +95,7 @@ def confirmar_rh(c_id: int, empresa_id: int, tipo: TipoContato = TipoContato.RH,
     empresa = s.get(Empresa, empresa_id) if empresa_id < 2**63 else None
     if empresa is None or tipo not in AGENDA_PELA_EMPRESA:
         raise HTTPException(422, "empresa ou tipo inválido")
+    if not c.contato.ativo:
+        raise HTTPException(409, "este contato está desativado: reative antes de ligar a uma empresa")
     contatos.vincular(s, c.contato, empresa, u.id, tipo)
     return _resumo(c)

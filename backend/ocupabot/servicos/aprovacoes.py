@@ -162,9 +162,10 @@ def _efetivar(s: Session, ap: Aprovacao, usuario_id: int | None) -> Agendamento:
     return ag
 
 
-def aprovar(s: Session, ap: Aprovacao, usuario_id: int, perfil: Perfil) -> Agendamento:
+def aprovar(s: Session, ap: Aprovacao, usuario_id: int, perfil: Perfil, pode_externo: bool = False) -> Agendamento:
+    """`pode_externo`: a pessoa da Recepção tem a permissão de mexer no que já está no sistema externo."""
     _conferir(ap)
-    if exige_supervisao(ap) and perfil not in SUPERVISAO:
+    if exige_supervisao(ap) and perfil not in SUPERVISAO and not pode_externo:
         raise SemPermissao("mudar o que já está no sistema externo exige a Supervisão")
     _conferir_base(ap)
     antes = auditoria.foto(ap)
@@ -188,13 +189,14 @@ def vence_em(s: Session, data: date, horario: time) -> datetime:
     return min(prazo, datetime.combine(data, horario) - ANTES_DO_EXAME)
 
 
-def propor(s: Session, ap: Aprovacao, usuario_id: int, perfil: Perfil, data: date, horario: time) -> Aprovacao:
+def propor(s: Session, ap: Aprovacao, usuario_id: int, perfil: Perfil, data: date, horario: time,
+           pode_externo: bool = False) -> Aprovacao:
     """Segura o horário proposto e pergunta à pessoa. NÃO agenda: isso só acontece quando ela responde 1."""
     _conferir(ap)
     if ap.tipo == TipoAprovacao.CANCELAMENTO:
         raise agenda.OperacaoInvalida("cancelamento não tem horário para propor: aprove ou recuse")
     _conferir_base(ap)
-    if exige_supervisao(ap) and perfil not in SUPERVISAO:
+    if exige_supervisao(ap) and perfil not in SUPERVISAO and not pode_externo:
         raise SemPermissao("este agendamento está no sistema externo: só a Supervisão propõe outro horário")
     if ap.contato is None:
         raise agenda.OperacaoInvalida("pedido sem contato de WhatsApp: recuse e combine o horário por telefone")

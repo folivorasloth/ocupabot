@@ -74,19 +74,42 @@ def test_dia_sem_audiometria_e_horario_ocupado():
     assert "não está livre" in r
 
 
-def test_particular_admissional_pede_rg_setor_cargo():
-    f = Fala()
+def _admissional_particular(f: Fala) -> str:
     f.diz("oi")
     assert "Empresa" in f.diz("1")
     assert "tipo de exame" in f.diz("2")  # particular
     f.diz("1")  # admissional
     f.diz("Joana Particular Inventada")
     f.diz(gerar_cpf("291417776"))
-    assert "RG" in f.diz("03/03/1988")
+    return f.diz("03/03/1988")
+
+
+def test_particular_admissional_pede_so_a_funcao():
+    f = Fala()
+    assert "Função" in _admissional_particular(f)  # RG e setor nascem desligados
+    assert "não entendi" in f.diz("não sei")
+    assert "Quais exames" in f.diz("Operadora")
+    assert "mais próximo" in f.diz("1")
+
+
+def test_admissional_com_rg_e_setor_ligados():
+    with db.sessao() as s:
+        for chave in ("pedir_rg", "pedir_setor"):
+            s.get(parametros.Parametro, chave).valor = "true"
+    f = Fala()
+    assert "RG" in _admissional_particular(f)
     assert "Setor" in f.diz("12.345.678-9")
     assert "Função" in f.diz("Produção")
     assert "Quais exames" in f.diz("Operadora")
-    assert "mais próximo" in f.diz("1")
+    f2 = Fala("5511900000010")
+    f2.diz("oi")
+    f2.diz("1")
+    f2.diz("2")
+    f2.diz("1")
+    f2.diz("Outra Particular Inventada")
+    f2.diz(gerar_cpf("111444777"))
+    f2.diz("03/03/1988")
+    assert "Setor" in f2.diz("não tenho")  # sem o RG em mãos, segue
 
 
 def test_especialista_vai_para_equipe():

@@ -9,7 +9,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validat
 
 from ..dominio.documentos import tem_documento
 from ..dominio.texto import normalizar_telefone
-from ..enums import Perfil, TipoExcecao, Turno
+from ..enums import Perfil, TipoContato, TipoExcecao, Turno
 from ..seguranca import problema_senha
 
 
@@ -61,6 +61,7 @@ class UsuarioNovo(BaseModel):
     senha: Senha
     perfil: Perfil
     whatsapp: WhatsApp = None
+    pode_externo: bool = False
 
     @model_validator(mode="after")
     def _senha_sem_login(self) -> UsuarioNovo:
@@ -76,6 +77,7 @@ class UsuarioAlterar(BaseModel):
     ativo: bool | None = None
     senha: Senha | None = None
     whatsapp: WhatsApp = None
+    pode_externo: bool | None = None
 
 
 class AgendamentoNovo(BaseModel):
@@ -91,6 +93,12 @@ class AgendamentoNovo(BaseModel):
     horario: time
     observacao: TextoLivre | None = Field(default=None, max_length=2000)
     forcar: bool = False
+
+
+class ContatoDaEmpresa(BaseModel):
+    telefone: WhatsApp
+    nome: str | None = Field(default=None, max_length=120)
+    tipo: TipoContato = TipoContato.RH
 
 
 class Remarcar(BaseModel):

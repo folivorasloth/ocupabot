@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from ..dominio import datas
 from ..dominio.texto import normalizar, variantes
-from ..enums import STATUS_ATIVOS, Perfil, StatusAgendamento
+from ..enums import STATUS_ATIVOS, StatusAgendamento
 from ..modelos import Agendamento, Usuario
 from ..relogio import agora
 from ..servicos import agenda
@@ -199,7 +199,7 @@ class Equipe:
 
     def _bloqueado_no_externo(self, ag: Agendamento, acao: str) -> bool:
         return (acao in ("CANCELAR", "REMARCAR") and ag.no_sistema_externo
-                and self.u.perfil not in (Perfil.SUPERVISAO, Perfil.ADMIN))
+                and not self.u.mexe_no_externo())
 
     def _confirmar(self, pend: dict) -> None:
         ag = self.s.get(Agendamento, pend["ag"])

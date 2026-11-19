@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, qs } from "../api";
-import ListaAgenda from "../componentes/ListaAgenda";
+import ListaAgenda, { passouDoHorario } from "../componentes/ListaAgenda";
 import { Abas, Cabecalho, Carregando, Erro, useRecurso } from "../componentes/ui";
+import { EQUIPE, useSessao } from "../sessao";
 import { dataCurta, plural } from "../formato";
 import type { Agendamento, Contadores } from "../tipos";
 
@@ -21,6 +22,32 @@ const ABAS: { id: string; rotulo: string; status: string[]; vazio: string }[] = 
   { id: "cancelados", rotulo: "Cancelados", status: ["CANCELADO", "REMARCADO"], vazio: "Nada cancelado nem remarcado hoje." },
 ];
 
+/** O próximo a chegar (ou quem já passou do horário), com Chegou e Faltou à mão. */
+function Proximo({ a, mudou }: { a: Agendamento; mudou: () => void }) {
+  const { pode } = useSessao();
+  const [erro, setErro] = useState<string | null>(null);
+  const atrasado = passouDoHorario(a);
+  const marcar = (rota: string) => { setErro(null); api.post(`/agendamentos/${a.id}/${rota}`).then(mudou).catch((e) => setErro((e as Error).message)); };
+  return (
+    <div className={`cartao mb-4 ${atrasado ? "border-amber-300 bg-amber-50" : ""}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold uppercase text-slate-500">{atrasado ? "Passou do horário" : "Próximo"}</div>
+          <div className="text-lg font-semibold text-slate-800">{a.horario} · {a.paciente.nome || "(sem nome)"}</div>
+          <div className="text-sm text-slate-500">{a.empresa ?? "Particular"}{a.tipo_aso ? ` · ${a.tipo_aso}` : ""} · {a.exames.map((e) => e.nome).join(", ")}</div>
+        </div>
+        {pode(...EQUIPE) && (
+          <div className="flex gap-2">
+            <button className="botao-primario" onClick={() => marcar("presenca")}>Chegou</button>
+            <button className="botao-secundario" onClick={() => marcar("falta")}>Faltou</button>
+          </div>
+        )}
+      </div>
+      <Erro texto={erro} />
+    </div>
+  );
+}
+
 function Numero({ rotulo, valor, para, dica }: { rotulo: string; valor: number; para?: string; dica?: string }) {
   const corpo = (<div className="cartao h-full"><div className="text-2xl font-semibold text-slate-800">{valor}</div><div className="text-xs text-slate-500">{rotulo}</div>{dica && <div className="mt-1 text-[11px] text-slate-400">{dica}</div>}</div>);
   return para ? <Link to={para} className="block hover:opacity-80">{corpo}</Link> : corpo;
@@ -34,6 +61,8 @@ export default function Hoje() {
   const ativos = (r.agendamentos.AGENDADO ?? 0) + (r.agendamentos.CONFIRMADO ?? 0);
   const conta = (status: string[]) => (agenda ?? []).filter((a) => status.includes(a.status)).length;
   const atual = ABAS.find((a) => a.id === aba)!;
+  const mudou = () => { recarregar(); recarregarAgenda(); };
+  const proximo = (agenda ?? []).find((a) => a.status === "AGENDADO" || a.status === "CONFIRMADO");
   const alertas = (
     <div className="mb-4 space-y-2">
       {r.alertas.map((a, i) => {
@@ -53,13 +82,14 @@ export default function Hoje() {
         <Numero rotulo="conversas esperando a equipe" valor={r.conversas_esperando} para="/conversas" />
         <Numero rotulo="agendados nos próximos 7 dias" valor={r.proximos_7_dias} para="/agenda" />
       </div>
+      {proximo && <Proximo a={proximo} mudou={mudou} />}
       <div className="cartao">
         <h2 className="mb-2 font-semibold text-slate-700">Agenda do dia</h2>
         <Erro texto={erroAgenda} />
         {!agenda ? (erroAgenda ? null : <Carregando />) : (
           <>
             <Abas abas={ABAS.map((a) => [a.id, `${a.rotulo} (${conta(a.status)})`])} ativa={aba} mudar={setAba} />
-            <ListaAgenda itens={agenda.filter((a) => atual.status.includes(a.status))} vazio={atual.vazio} recarregar={() => { recarregar(); recarregarAgenda(); }} />
+            <ListaAgenda itens={agenda.filter((a) => atual.status.includes(a.status))} vazio={atual.vazio} recarregar={mudou} />
           </>
         )}
       </div>

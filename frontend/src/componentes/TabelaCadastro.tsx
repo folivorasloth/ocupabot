@@ -14,8 +14,6 @@ interface Props {
   recurso: string; campos: Campo[]; podeEditar: boolean; busca?: boolean;
   /** "empresa" / "empresas": o contador da lista em português. */
   nome: [string, string];
-  /** Caixa de marcar acima da lista que mostra só parte dos registros (ex.: "só PCMSO a cobrar"). */
-  filtro?: { rotulo: string; teste: (r: Registro) => boolean };
 }
 
 function exibir(c: Campo, v: unknown): string {
@@ -27,14 +25,13 @@ function exibir(c: Campo, v: unknown): string {
   return String(v);
 }
 
-export default function TabelaCadastro({ recurso, campos, podeEditar, busca, nome, filtro }: Props) {
+export default function TabelaCadastro({ recurso, campos, podeEditar, busca, nome }: Props) {
   const [q, setQ] = useState("");
-  const [so, setSo] = useState(false);
   const [lista, erro, recarregar] = useRecurso(() => api.get<Registro[]>(`/${recurso}${qs({ q })}`), [recurso, q]);
   const [edicao, setEdicao] = useState<Registro | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
   const visiveis = campos.filter((c) => c.naLista !== false);
-  const mostrados = lista && filtro && so ? lista.filter(filtro.teste) : lista;
+  const mostrados = lista;
   const falta = edicao ? campos.filter((c) => c.obrigatorio && !(edicao.id && c.somenteCriar) && (edicao[c.chave] === undefined || edicao[c.chave] === null || String(edicao[c.chave]).trim() === "")) : [];
 
   async function salvar() {
@@ -60,11 +57,10 @@ export default function TabelaCadastro({ recurso, campos, podeEditar, busca, nom
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {busca && <input className="campo max-w-xs" placeholder="Buscar…" aria-label="Buscar" value={q} onChange={(e) => setQ(e.target.value)} />}
-        {filtro && <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={so} onChange={(e) => setSo(e.target.checked)} />{filtro.rotulo}</label>}
         {mostrados && !erro && <span className="text-xs text-slate-500">{plural(mostrados.length, nome[0], nome[1])}</span>}
         {podeEditar && <button className="botao-primario ml-auto" onClick={() => { setFalha(null); setEdicao({}); }}>+ Novo</button>}
       </div>
-      <Lista dados={mostrados} erro={erro} vazio={q || so ? `Nada encontrado com esse filtro.` : `Nenhum registro ainda.`}>{(itens) => (
+      <Lista dados={mostrados} erro={erro} vazio={q ? "Nada encontrado com essa busca." : "Nenhum registro ainda."}>{(itens) => (
         <div className="overflow-x-auto">
           <table className="tabela tabela-cartao">
             <thead><tr>{visiveis.map((c) => <th key={c.chave}>{c.rotulo}</th>)}{podeEditar && <th></th>}</tr></thead>

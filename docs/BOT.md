@@ -37,6 +37,28 @@ perguntar de novo a etapa anterior. `MENU` recomeça do zero.
 
 Datas podem vir como `10/11`, `amanhã`, `sexta` ou `dia 12`.
 
+### Ficha numa mensagem só
+Muitas empresas mandam tudo de uma vez, com ou sem rótulos (`dominio/ficha.py`):
+
+```text
+Nome: Ana Souza / CPF: 529.982.247-25 / Nascimento: 14/05/1990 / Função: Auxiliar
+Ana Souza 52998224725 14/05/1990 auxiliar de produção
+```
+
+O bot guarda o que veio e pergunta só o que faltou; mandada antes do menu, a ficha já começa o agendamento.
+Mensagem com dois CPFs são dois pacientes e não é lida como ficha. No histórico fica só
+`[FICHA DO PACIENTE]`.
+
+No admissional o bot pede a função; RG e setor só com os parâmetros `pedir_rg` e `pedir_setor` (nascem
+desligados), e "não tenho" vale como resposta do RG.
+
+### Conversa tolerante
+- "oi" no meio do fluxo refaz a pergunta de onde parou; "obrigado", "kkk" e emoji não contam como erro.
+- Pergunta não é SIM: "pode ser à tarde?" não confirma o horário.
+- "é pra mim" vale como particular; "não sei o CNPJ" pede o nome da empresa.
+- No lembrete, "não vou poder ir" e "vou faltar" valem como NÃO; "não vou faltar" e frases com ressalva
+  ("não sei se...", "..., mas ...") continuam pedindo SIM ou NÃO.
+
 ## Proposta de outro horário
 Quando a equipe propõe outro horário em Pedidos do bot, a conversa entra no fluxo `PROPOSTA`: 1 (ou SIM)
 confirma, 2 (ou NÃO) pede outro horário e a conversa vai para a equipe. Esse fluxo tem prazo próprio
@@ -47,7 +69,9 @@ Quem escreve "oi", "bom dia", "quero agendar" em três mensagens recebe **uma** 
 (`bot/rajadas.py`). O webhook só guarda a mensagem; o app responde quando o número fica
 `agrupar_mensagens_segundos` (padrão 8) sem escrever, ou depois de 60 s se a pessoa não parar. As mensagens
 passam em ordem pela mesma máquina de estados e sai só a resposta final; a que não fez a conversa andar
-("obrigado" depois de uma resposta válida) fica só no histórico. Com 0, cada mensagem responde na hora.
+("obrigado" depois de uma resposta válida) fica só no histórico. Um "sim" ou "ok" que chegou na mesma
+rajada da mensagem que gerou a pergunta também: a pessoa ainda não viu o que estaria confirmando.
+Com 0, cada mensagem responde na hora.
 
 ## Comandos da equipe
 Usuário ativo do painel com o WhatsApp cadastrado (Usuários → WhatsApp) fala com o bot por comandos
@@ -63,7 +87,7 @@ Usuário ativo do painel com o WhatsApp cadastrado (Usuários → WhatsApp) fala
 | `ajuda` | Mostra os comandos |
 
 Nada muda sem o **SIM**: o bot repete o que entendeu e espera a confirmação por 10 minutos. Valem as regras
-do painel (presença e falta só a partir do dia; o que está no sistema externo, só a Supervisão) e tudo vai
+do painel (presença e falta só a partir do dia; o que está no sistema externo, só a Supervisão ou quem ela liberou) e tudo vai
 para a auditoria com o ator `whatsapp_equipe`. O que não é comando segue para o bot de sempre.
 
 ## Testando

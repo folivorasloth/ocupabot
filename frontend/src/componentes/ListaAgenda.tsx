@@ -8,14 +8,23 @@ import { Erro, Modal, Selo, Vazio } from "./ui";
 
 const ORIGEM: Record<string, string> = { WHATSAPP: "WhatsApp", PAINEL: "Painel", IMPORTACAO: "Importado" };
 
+/** Passou 30 minutos do horário de hoje e ninguém marcou Chegou nem Faltou. */
+export function passouDoHorario(a: Agendamento): boolean {
+  if (a.data !== hojeIso() || (a.status !== "AGENDADO" && a.status !== "CONFIRMADO")) return false;
+  const [h, m] = a.horario.split(":").map(Number);
+  const agora = new Date();
+  return agora.getHours() * 60 + agora.getMinutes() > h * 60 + m + 30;
+}
+
 export default function ListaAgenda({ itens, recarregar, mostrarData, vazio }: { itens: Agendamento[]; recarregar: () => void; mostrarData?: boolean; vazio?: string }) {
-  const { pode } = useSessao();
+  const { pode, usuario } = useSessao();
   const [alvo, setAlvo] = useState<{ ag: Agendamento; acao: "cancelar" | "remarcar" } | null>(null);
   const [motivo, setMotivo] = useState("");
   const [nova, setNova] = useState({ data: "", horario: "" });
   const [erro, setErro] = useState<string | null>(null);
   const equipe = pode(...EQUIPE);
   const supervisao = pode("SUPERVISAO");
+  const mexeNoExterno = supervisao || !!usuario?.pode_externo; // a Supervisão, ou quem ela liberou
   const hoje = hojeIso();
 
   async function acao(ag: Agendamento, rota: string, corpo: unknown = {}) {
@@ -35,17 +44,18 @@ export default function ListaAgenda({ itens, recarregar, mostrarData, vazio }: {
             {itens.map((a) => {
               const ativo = a.status === "AGENDADO" || a.status === "CONFIRMADO";
               const chegouODia = a.data <= hoje; // presença e falta só a partir do dia do exame
-              const mexe = !a.no_sistema_externo || supervisao; // o que está no sistema externo só a Supervisão altera
+              const mexe = !a.no_sistema_externo || mexeNoExterno; // o que está no sistema externo, só quem pode
+              const atrasado = passouDoHorario(a);
               return (
-                <tr key={a.id}>
+                <tr key={a.id} className={atrasado ? "bg-amber-50" : undefined}>
                   {mostrarData && <td className="whitespace-nowrap">{dataCurta(a.data)}</td>}
-                  <td className="font-medium">{a.horario}</td>
+                  <td className="font-medium">{a.horario}{atrasado && <div className="whitespace-nowrap text-xs font-normal text-amber-800">passou do horário</div>}</td>
                   <td>{a.paciente.nome || "(sem nome)"}<div className="text-xs text-slate-400">{a.paciente.cpf}{a.paciente.cpf ? " · " : ""}{ORIGEM[a.origem] ?? "Outro"}</div>
                     {a.contato && <div className="text-xs text-slate-500">pediu: {a.contato_nome ? `${a.contato_nome} · ` : ""}{telefone(a.contato)}</div>}
                     {ativo && a.sem_aviso && <div className="text-xs text-amber-700">{a.contato ? "pediu SAIR: não recebe avisos" : "sem WhatsApp: ninguém recebe avisos"}</div>}</td>
                   <td>{a.empresa ?? <span className="text-slate-400">Particular</span>}<div className="text-xs text-slate-500">{a.tipo_aso}</div></td>
                   <td className="text-xs">{a.exames.map((e) => <div key={e.id}>{e.nome}{e.profissional && <span className="text-slate-400"> · {e.profissional}</span>}</div>)}</td>
-                  <td><Selo valor={a.status} />{a.no_sistema_externo && <div className="mt-1 text-xs text-slate-500">no sistema externo</div>}
+                  <td><Selo valor={a.status} />{a.teste && <div className="mt-1"><span className="rounded bg-violet-100 px-1.5 text-xs text-violet-800">teste</span></div>}{a.no_sistema_externo && <div className="mt-1 text-xs text-slate-500">no sistema externo</div>}
                     {a.motivo_cancelamento && <div className="mt-1 max-w-[14rem] text-xs text-slate-500">{a.motivo_cancelamento}</div>}</td>
                   {equipe && (
                     <td className="text-right">
@@ -54,7 +64,8 @@ export default function ListaAgenda({ itens, recarregar, mostrarData, vazio }: {
                         {ativo && chegouODia && <button className="botao-secundario" onClick={() => acao(a, "falta")}>Faltou</button>}
                         {(ativo || a.status === "FALTOU") && mexe && <button className="botao-secundario" onClick={() => { setNova({ data: a.data < hoje ? hoje : a.data, horario: "" }); setAlvo({ ag: a, acao: "remarcar" }); }}>Remarcar</button>}
                         {ativo && mexe && <button className="botao-secundario" onClick={() => { setMotivo(""); setAlvo({ ag: a, acao: "cancelar" }); }}>Cancelar</button>}
-                        {ativo && (!a.no_sistema_externo || supervisao) && <label className="inline-flex items-center gap-1 px-1 text-xs text-slate-500" title="Marque depois de lançar no sistema de gestão da clínica"><input type="checkbox" checked={a.no_sistema_externo} onChange={(e) => acao(a, `externo?lancado=${e.target.checked}`)} />lançado</label>}
+                        {a.teste && supervisao && <button className="botao-secundario" title="Agendamento de teste some de vez" onClick={() => { setErro(null); api.del(`/agendamentos/${a.id}/teste`).then(recarregar).catch((e) => setErro((e as Error).message)); }}>Apagar teste</button>}
+                        {ativo && !a.teste && mexe && <label className="inline-flex items-center gap-1 px-1 text-xs text-slate-500" title="Marque depois de lançar no sistema de gestão da clínica"><input type="checkbox" checked={a.no_sistema_externo} onChange={(e) => acao(a, `externo?lancado=${e.target.checked}`)} />lançado</label>}
                       </div>
                     </td>
                   )}

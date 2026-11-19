@@ -13,10 +13,13 @@ const EXPLICA: Record<Perfil, string> = {
 };
 const SENHA = "Ao menos 10 caracteres; não vale só números, senha muito comum nem o login dentro dela. A pessoa troca no primeiro acesso.";
 
-interface Ficha { id?: number; nome: string; login: string; senha: string; perfil: Perfil; whatsapp: string; ativo: boolean }
+interface Ficha { id?: number; nome: string; login: string; senha: string; perfil: Perfil; whatsapp: string; ativo: boolean; pode_externo: boolean }
 
 export default function Usuarios() {
   const { usuario } = useSessao();
+  // a Supervisão só enxerga e mexe em quem é da Recepção; Supervisão e administração, só a administração
+  const admin = usuario?.perfil === "ADMIN";
+  const perfis = admin ? PERFIS : PERFIS.filter((p) => p === "RECEPCAO");
   const [lista, erro, recarregar] = useRecurso(() => api.get<Usuario[]>("/usuarios"));
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [falha, setFalha] = useState<string | null>(null);
@@ -28,10 +31,10 @@ export default function Usuarios() {
     setFalha(null);
     try {
       if (ficha.id) {
-        await api.patch(`/usuarios/${ficha.id}`, { nome: ficha.nome, perfil: ficha.perfil, ativo: ficha.ativo, whatsapp: ficha.whatsapp || null, ...(ficha.senha ? { senha: ficha.senha } : {}) });
+        await api.patch(`/usuarios/${ficha.id}`, { nome: ficha.nome, perfil: ficha.perfil, ativo: ficha.ativo, whatsapp: ficha.whatsapp || null, pode_externo: ficha.perfil === "RECEPCAO" && ficha.pode_externo, ...(ficha.senha ? { senha: ficha.senha } : {}) });
         setFeito(ficha.senha ? `Senha de ${ficha.nome} redefinida: ela troca no próximo acesso.` : "Usuário alterado.");
       } else {
-        await api.post("/usuarios", { nome: ficha.nome, login: ficha.login, senha: ficha.senha, perfil: ficha.perfil, whatsapp: ficha.whatsapp || null });
+        await api.post("/usuarios", { nome: ficha.nome, login: ficha.login, senha: ficha.senha, perfil: ficha.perfil, whatsapp: ficha.whatsapp || null, pode_externo: ficha.perfil === "RECEPCAO" && ficha.pode_externo });
         setFeito(`Usuário ${ficha.login} criado. Passe a senha provisória: a pessoa cria a dela no primeiro acesso.`);
       }
       setFicha(null);
@@ -41,8 +44,8 @@ export default function Usuarios() {
 
   return (
     <>
-      <Cabecalho titulo="Usuários" sub="Quem entra no painel e o que cada um pode fazer.">
-        <button className="botao-primario" onClick={() => { setFalha(null); setFicha({ nome: "", login: "", senha: "", perfil: "RECEPCAO", whatsapp: "", ativo: true }); }}>+ Novo usuário</button>
+      <Cabecalho titulo="Usuários" sub={admin ? "Quem entra no painel e o que cada um pode fazer." : "As pessoas da Recepção. Supervisão e administração são cadastradas pela administração."}>
+        <button className="botao-primario" onClick={() => { setFalha(null); setFicha({ nome: "", login: "", senha: "", perfil: "RECEPCAO", whatsapp: "", ativo: true, pode_externo: false }); }}>+ Novo usuário</button>
       </Cabecalho>
       <Aviso texto={feito} />
       <div className="cartao">
@@ -51,10 +54,10 @@ export default function Usuarios() {
             <table className="tabela tabela-cartao"><thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>WhatsApp</th><th>Situação</th><th></th></tr></thead>
               <tbody>{itens.map((u) => (
                 <tr key={u.id}>
-                  <td>{u.nome}</td><td className="font-mono text-xs">{u.login}</td><td>{PERFIL[u.perfil] ?? u.perfil}</td>
+                  <td>{u.nome}</td><td className="font-mono text-xs">{u.login}</td><td>{PERFIL[u.perfil] ?? u.perfil}{u.perfil === "RECEPCAO" && u.pode_externo && <div className="text-xs text-slate-500">mexe no sistema de gestão</div>}</td>
                   <td className="whitespace-nowrap">{u.whatsapp ? telefone(u.whatsapp) : "—"}</td>
                   <td>{u.ativo ? "Ativo" : "Desativado"}{u.trocar_senha && <div className="text-xs text-amber-700">ainda não criou a própria senha</div>}</td>
-                  <td className="text-right"><button className="botao-secundario" onClick={() => { setFalha(null); setFicha({ id: u.id, nome: u.nome, login: u.login, senha: "", perfil: u.perfil, whatsapp: u.whatsapp ?? "", ativo: u.ativo }); }}>Alterar</button></td>
+                  <td className="text-right"><button className="botao-secundario" onClick={() => { setFalha(null); setFicha({ id: u.id, nome: u.nome, login: u.login, senha: "", perfil: u.perfil, whatsapp: u.whatsapp ?? "", ativo: u.ativo, pode_externo: u.pode_externo }); }}>Alterar</button></td>
                 </tr>
               ))}</tbody></table>
           </div>
@@ -68,9 +71,15 @@ export default function Usuarios() {
             {!ficha.id && <div><label className="rotulo" htmlFor="u-login">Login * (letras minúsculas, números, ponto ou traço)</label><input id="u-login" className="campo" value={ficha.login} onChange={(e) => setFicha({ ...ficha, login: e.target.value.toLowerCase().trim() })} autoCapitalize="none" /></div>}
             <div>
               <label className="rotulo" htmlFor="u-perfil">Perfil *</label>
-              <select id="u-perfil" className="campo" value={ficha.perfil} onChange={(e) => setFicha({ ...ficha, perfil: e.target.value as Perfil })} aria-describedby="u-perfil-ajuda">{PERFIS.map((p) => <option key={p} value={p}>{PERFIL[p]}</option>)}</select>
+              <select id="u-perfil" className="campo" value={ficha.perfil} onChange={(e) => setFicha({ ...ficha, perfil: e.target.value as Perfil })} aria-describedby="u-perfil-ajuda">{perfis.map((p) => <option key={p} value={p}>{PERFIL[p]}</option>)}</select>
               <p id="u-perfil-ajuda" className="mt-1 text-xs text-slate-500">{EXPLICA[ficha.perfil]}</p>
             </div>
+            {ficha.perfil === "RECEPCAO" && (
+              <div>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ficha.pode_externo} onChange={(e) => setFicha({ ...ficha, pode_externo: e.target.checked })} aria-describedby="u-externo-ajuda" />Pode remarcar e cancelar o que já está no sistema de gestão</label>
+                <p id="u-externo-ajuda" className="mt-1 text-xs text-slate-500">Sem esta permissão, só a Supervisão mexe no que já foi lançado lá. Vale no painel, nos pedidos do bot e nos comandos pelo WhatsApp.</p>
+              </div>
+            )}
             <div>
               <label className="rotulo" htmlFor="u-zap">WhatsApp (opcional)</label>
               <input id="u-zap" className="campo" value={ficha.whatsapp} onChange={(e) => setFicha({ ...ficha, whatsapp: e.target.value })} placeholder="DDD + número" inputMode="tel" aria-describedby="u-zap-ajuda" />

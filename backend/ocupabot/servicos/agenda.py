@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..config import config
@@ -192,6 +192,7 @@ def criar(
     ator: str = "sistema",
     ignorar: set[int] | None = None,
     avisar_confirmacao: bool = True,
+    teste: bool = False,
 ) -> Agendamento:
     """Cria conferindo a vaga dentro da mesma transação (BEGIN IMMEDIATE no SQLite)."""
     if not exame_ids:
@@ -211,7 +212,7 @@ def criar(
     turno = r.turno_de(data, horario) or ("MANHA" if horario < time(12) else "TARDE")
     ag = Agendamento(paciente_id=paciente_id, empresa_id=empresa_id, contato_id=contato_id,
                      tipo_aso_id=tipo_aso_id, data=data, horario=horario, turno=Turno(turno), status=status,
-                     origem=origem, observacao=observacao)
+                     origem=origem, observacao=observacao, teste=teste)
     exames = s.scalars(select(Exame).where(Exame.id.in_(exame_ids))).all()
     ag.itens = [ItemAgendamento(exame_id=e.id, profissional_id=escolha.get(e.funcao_id)) for e in exames]
     s.add(ag)
@@ -221,6 +222,32 @@ def criar(
     if status in (StatusAgendamento.AGENDADO, StatusAgendamento.CONFIRMADO):
         programar_avisos(s, ag, confirmacao=avisar_confirmacao)
     return ag
+
+
+def apagar_teste(s: Session, ag: Agendamento, usuario_id: int | None = None) -> None:
+    """Agendamento de teste some de vez (com os avisos, se houver). Agendamento de verdade nunca é apagado."""
+    if not ag.teste:
+        raise OperacaoInvalida("só agendamento de teste pode ser apagado; os outros são cancelados")
+    for n in s.scalars(select(Notificacao).where(Notificacao.agendamento_id == ag.id)):
+        s.delete(n)
+    auditoria.registrar(s, "agendamento", ag.id, "apagar_teste", auditoria.foto(ag), None, usuario_id, "painel")
+    s.delete(ag)
+    s.flush()
+
+
+def exames_no_periodo(s: Session, de: date, ate: date) -> list[dict]:
+    """Quantos de cada exame há em cada dia e turno (para avisar quem atende). Teste não conta."""
+    linhas = s.execute(
+        select(Agendamento.data, Agendamento.turno, Exame.nome, func.count(ItemAgendamento.id))
+        .join(ItemAgendamento, ItemAgendamento.agendamento_id == Agendamento.id)
+        .join(Exame, Exame.id == ItemAgendamento.exame_id)
+        .where(Agendamento.data.between(de, ate), Agendamento.status.in_(STATUS_OCUPAM),
+               Agendamento.teste.is_(False))
+        .group_by(Agendamento.data, Agendamento.turno, Exame.nome, Exame.ordem)
+        .order_by(Exame.ordem, Exame.nome, Agendamento.data)
+    )
+    return [{"data": d.isoformat(), "turno": turno.value, "exame": exame, "quantos": n}
+            for d, turno, exame, n in linhas]
 
 
 def carregar(s: Session, ag_id: int) -> Agendamento:
@@ -291,7 +318,7 @@ def remarcar(s: Session, ag: Agendamento, data: date, horario: time, usuario_id:
 # --- Avisos ----------------------------------------------------------------------------------------
 
 def programar_avisos(s: Session, ag: Agendamento, confirmacao: bool = True) -> None:
-    if not ag.contato_id:
+    if not ag.contato_id or ag.teste:  # teste não manda WhatsApp
         return
     if confirmacao:
         s.add(Notificacao(tipo=TipoNotificacao.CONFIRMACAO, contato_id=ag.contato_id,

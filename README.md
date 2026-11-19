@@ -17,7 +17,7 @@ várias fontes. O OcupaBot junta isso num lugar só:
 | **Aprovação humana** | Tudo o que o bot pede espera a equipe, com a vaga segura enquanto isso. Outro horário? A equipe propõe e a pessoa confirma |
 | **Quem agenda** | RH, credenciadora e contabilidade: um contato pode agendar por várias empresas |
 | **Equipe no WhatsApp** | Quem é da equipe marca presença, falta, cancela, remarca e vê a agenda por mensagem, sempre com confirmação |
-| **Painel web** | Hoje em abas, agenda, pedidos do bot, conversas (assumir/devolver), cadastros, PCMSO das empresas, grade, textos do bot e auditoria. Funciona no celular e pode ser instalado na tela de início |
+| **Painel web** | Hoje em abas com o próximo paciente, agenda com a contagem de exames, pedidos do bot, conversas (assumir/devolver), cadastros, PCMSO das empresas, grade, textos do bot e auditoria. Funciona no celular e pode ser instalado na tela de início |
 | **Sistema externo** | A agenda oficial fica atrás de uma interface, com um simulador incluído |
 | **Avisos** | Confirmação, lembrete do dia anterior, falta e remarcação, com uma trava geral |
 

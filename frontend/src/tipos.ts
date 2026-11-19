@@ -2,6 +2,8 @@ export type Perfil = "ADMIN" | "SUPERVISAO" | "RECEPCAO";
 
 export interface Usuario {
   id: number; nome: string; login: string; perfil: Perfil; ativo: boolean; trocar_senha: boolean; whatsapp: string | null;
+  /** Recepção com a permissão de remarcar e cancelar o que já está no sistema externo. */
+  pode_externo: boolean;
 }
 
 export interface ExameItem { id: number; nome: string; profissional: string | null }
@@ -11,7 +13,7 @@ export interface Agendamento {
   paciente: { id: number; nome: string; cpf: string }; empresa: string | null; empresa_id: number | null;
   tipo_aso: string | null; contato: string | null; contato_nome: string | null; sem_aviso: boolean;
   exames: ExameItem[]; remarcado_de_id: number | null;
-  motivo_cancelamento: string | null; observacao: string | null; no_sistema_externo: boolean;
+  motivo_cancelamento: string | null; observacao: string | null; no_sistema_externo: boolean; teste: boolean;
 }
 
 export type StatusAprovacao = "PENDENTE" | "AGUARDANDO_CLIENTE" | "APROVADA" | "RECUSADA" | "EXPIRADA";
@@ -35,7 +37,7 @@ export interface Conversa {
 }
 
 export interface QuemAgenda {
-  id: number; telefone: string; nome: string | null; tipo: string; empresa_id: number | null; optout: boolean;
+  id: number; telefone: string; nome: string | null; tipo: string; empresa_id: number | null; optout: boolean; ativo: boolean;
   empresas: { id: number; nome: string }[];
 }
 

@@ -34,7 +34,7 @@ const MENU: { secao: string; itens: Item[] }[] = [
   { secao: "Configuração", itens: [
     { para: "/simulador", rotulo: "Testar o bot", perfis: ["SUPERVISAO", "RECEPCAO"] },
     { para: "/configuracoes", rotulo: "Mensagens do bot e regras", perfis: ["SUPERVISAO"] },
-    { para: "/usuarios", rotulo: "Usuários", perfis: [] },
+    { para: "/usuarios", rotulo: "Usuários", perfis: ["SUPERVISAO"] },
     { para: "/auditoria", rotulo: "Auditoria", perfis: ["SUPERVISAO"] },
   ] },
 ];
