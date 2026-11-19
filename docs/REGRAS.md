@@ -57,16 +57,28 @@ Só avisam; quem decide é a recepção.
 - Com uma empresa, o bot já sabe para quem é o exame. Com várias, pergunta. A opção 0 procura outra empresa.
 - Os avisos (confirmação, lembrete, falta) vão para quem agendou.
 - Paciente particular cadastrado com telefone ganha o contato que recebe os avisos.
+- O WhatsApp de quem agenda pode ser cadastrado pela empresa: número novo cria o contato já ligado; número que
+  já existe só liga.
+- Contato desativado sai das listas e o bot o trata como um número qualquer. Nada é apagado; reativar volta
+  a valer.
 
 ## Agenda
 - O bot só oferece horário com `antecedencia_minima_min` de folga (padrão 60). A equipe pode marcar em cima da hora.
 - A equipe não agenda além de `agenda_max_dias_futuro` (padrão 365): evita data digitada errada.
 - Presença e falta só podem ser marcadas a partir do dia do exame.
-- A tela Hoje avisa o agendamento que passou 30 minutos do horário sem presença nem falta.
+- A tela Hoje avisa o agendamento que passou 30 minutos do horário sem presença nem falta, e mostra o
+  próximo paciente com Chegou e Faltou à mão.
+- A Agenda mostra quantos de cada exame há: no dia, manhã e tarde; na semana, cada dia.
+- Empresa lançada no sistema externo exige o CPF do paciente ao agendar pelo painel (o sistema externo acha
+  o funcionário pelo CPF); o CPF informado fica no cadastro.
+- Paciente cujo nome começa com TESTE gera um **agendamento de teste**: ocupa a vaga, mas não manda WhatsApp
+  nem conta nos números. Só Admin e Supervisão criam e apagam.
 
 ## PCMSO das empresas
 No cadastro da empresa: quem elaborou (a clínica ou outra empresa), até quando vale e se o documento em vigor
-chegou. Em branco, a clínica não acompanha. A tela Hoje avisa PCMSO vencido, vencendo em `pcmso_alerta_dias` e,
+chegou. Em branco, a clínica não acompanha. Cadastros → PCMSO mostra a situação de todas as empresas (em dia,
+vence em breve, vencido, documento não recebido, não acompanhado), com filtro "a cobrar" e "marcar recebido"
+na linha. A tela Hoje avisa PCMSO vencido, vencendo em `pcmso_alerta_dias` e,
 quando outra empresa elaborou, documento que ainda não chegou.
 
 ## Perfis
@@ -78,6 +90,10 @@ quando outra empresa elaborou, documento que ainda não chegou.
 
 Não existe perfil só de consulta. Sempre há ao menos um administrador ativo: o último não pode ser rebaixado
 nem desativado.
+
+A Supervisão abre Usuários, mas só enxerga e mexe em quem é da Recepção: cria, bloqueia, define a senha
+provisória e libera, **pessoa a pessoa**, remarcar e cancelar o que já está no sistema externo. Essa permissão
+vale no painel, nos pedidos do bot e nos comandos pelo WhatsApp. Supervisão e administração, só o admin altera.
 
 ## Avisos
 - Nascem desligados (`envios_automaticos`).
