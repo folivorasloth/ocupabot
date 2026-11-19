@@ -26,7 +26,7 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..dominio import datas
+from ..dominio import datas, ficha
 from ..dominio.documentos import cnpj_valido, cpf_problema, so_digitos
 from ..dominio.texto import normalizar, primeiro_nome
 from ..dominio.vagas import agrupar_faixas
@@ -52,6 +52,9 @@ from . import intencoes as it
 NAO_ENTENDI = object()
 # Etapas que não entram na trilha do VOLTAR
 SEM_VOLTA = {"MENU", "OFERTA", "RESPOSTA"}
+# O que cada etapa guarda nos dados da conversa (VOLTAR apaga para perguntar de novo)
+CAMPO = {"NOME": "nome", "CPF": "cpf", "NASCIMENTO": "nascimento", "RG": "rg", "SETOR": "setor", "CARGO": "cargo"}
+SEM_RG = "NAO_TEM"
 # O que a pessoa digita nestas etapas não fica legível no histórico
 MARCAS = {"CPF": "[CPF]", "NASCIMENTO": "[NASCIMENTO]", "RG": "[RG]"}
 
@@ -80,7 +83,14 @@ def registrar(s: Session, conv: Conversa, texto: str, id_externo: str | None = N
     """Grava a mensagem recebida no histórico, sem o dado sensível da etapa. False se for repetida."""
     marca = MARCAS.get(conv.etapa or "") if conv.estado == EstadoConversa.BOT else None
     gravado = marca if marca and sum(c.isdigit() for c in texto) >= 4 else texto
+    if eh_ficha(ficha.ler(texto, hoje())):  # a ficha inteira numa mensagem: nome, CPF e nascimento juntos
+        gravado = "[FICHA DO PACIENTE]"
     return conversas.registrar_entrada(s, conv, gravado, id_externo) is not None
+
+
+def eh_ficha(achado: dict[str, str]) -> bool:
+    """Dois campos ou mais, com CPF ou nascimento: é a ficha, não a resposta de uma pergunta só."""
+    return len(achado) >= 2 and bool({"cpf", "nascimento"} & set(achado))
 
 
 def processar(s: Session, telefone: str, texto: str, id_externo: str | None = None,
@@ -136,6 +146,7 @@ class Bot:
             return
         etapa = trilha.pop()
         self.d["_trilha"] = trilha
+        self.d.pop(CAMPO.get(etapa, ""), None)
         self.conv.etapa = etapa
         self.conv.erros_seguidos = 0
         getattr(self, f"p_{etapa.lower()}")()
@@ -215,6 +226,14 @@ class Bot:
             elif not proposta and it.eh_voltar(texto):
                 self.voltar()
                 return
+            elif self.conv.etapa != "MENU" and it.eh_saudacao(texto) and hasattr(self, f"p_{self.conv.etapa.lower()}"):
+                # "oi" no meio da conversa: continua de onde parou, sem contar como erro
+                self.sem_avanco = True
+                getattr(self, f"p_{self.conv.etapa.lower()}")()
+                return
+            elif self.conv.etapa != "MENU" and it.eh_cortesia(texto):
+                self.sem_avanco = True  # "obrigado", "kkk", um emoji: nem resposta nem erro
+                return
             else:
                 self.executar(texto)
                 return
@@ -222,6 +241,10 @@ class Bot:
         primeira = self.anterior is None
         if texto == "1":
             self.iniciar_agendamento()
+            return
+        dados = ficha.ler(texto, hoje())
+        if eh_ficha(dados):  # mandou a ficha do paciente sem passar pelo menu: já é um agendamento
+            self.iniciar_agendamento(dados)
             return
         if texto == "2":
             self.equipe("pedido do contato")
@@ -274,6 +297,8 @@ class Bot:
         elif it.eh_saudacao(texto):  # "oi" de novo: repete o menu, sem contar como erro
             self.sem_avanco = True
             self.diz("menu")
+        elif eh_ficha(ficha.ler(texto, hoje())):
+            self.iniciar_agendamento(ficha.ler(texto, hoje()))
         elif not self.texto_livre(texto):
             return NAO_ENTENDI
 
@@ -286,7 +311,7 @@ class Bot:
         n = abertos[0]
         ag = n.agendamento
         if n.tipo == TipoNotificacao.LEMBRETE_D1:
-            if not (it.eh_sim(texto) or it.eh_nao(texto)):
+            if not (it.eh_sim(texto) or it.eh_nao_ao_lembrete(texto)):
                 return False
             if len(abertos) > 1:
                 self.equipe("resposta a vários lembretes abertos")
@@ -386,8 +411,9 @@ class Bot:
 
     # --- agendamento: empresa -----------------------------------------------------------------------
 
-    def iniciar_agendamento(self) -> None:
-        self.d = {}
+    def iniciar_agendamento(self, dados: dict[str, str] | None = None) -> None:
+        """`dados`: a ficha que veio na primeira mensagem; o bot pergunta só o que faltar."""
+        self.d = dict(dados or {})
         self.ir("AGENDAR", None)
         if contatos.agenda_pela_empresa(self.contato):
             empresas = contatos.empresas_do_contato(self.s, self.contato)
@@ -411,6 +437,8 @@ class Bot:
 
     def e_quem(self, texto: str):
         op = it.opcao(texto, 2)
+        if op is None and it.eh_para_mim(texto):
+            op = 2
         if op == 1:
             self.d.pop("particular", None)
             self.passo("CNPJ")
@@ -438,6 +466,10 @@ class Bot:
                 return None
             return self.escolheu_empresa(emp)
         nome = normalizar(texto)
+        if it.nao_sabe(texto):  # "não sei o CNPJ": o nome da empresa também serve
+            self.sem_avanco = True
+            self.dizer("Sem problema: mande o nome da empresa.")
+            return None
         if len(nome) < 3:
             return NAO_ENTENDI
         achadas = [
@@ -497,30 +529,63 @@ class Bot:
             return NAO_ENTENDI
         t = tipos[op - 1]
         self.d.update(tipo_id=t.id, tipo_nome=t.nome, exige=t.exige_cadastro_completo)
-        self.passo("NOME")
+        self.seguir()
+
+    def seguir(self) -> None:
+        """Pergunta o próximo dado que falta. O que veio na ficha (ou já foi respondido) não é pedido de novo."""
+        for etapa in ("NOME", "CPF", "NASCIMENTO"):
+            if not self.d.get(CAMPO[etapa]):
+                self.passo(etapa)
+                return
+        existente = self.s.scalar(select(Paciente).where(Paciente.cpf == self.d["cpf"]))
+        # CPF já cadastrado com outro nascimento segue a MESMA conversa de um CPF novo (senão o bot
+        # revelaria quem é paciente); a divergência vira marcador para a recepção conferir.
+        self.d["divergencia"] = bool(existente and existente.nascimento
+                                     and existente.nascimento.isoformat() != self.d["nascimento"])
+        if self.d.get("exige"):  # admissional: RG e setor só com os parâmetros ligados; a função, sempre
+            pede = {"RG": parametros.ligado(self.s, "pedir_rg"), "SETOR": parametros.ligado(self.s, "pedir_setor"),
+                    "CARGO": True}
+            for etapa in ("RG", "SETOR", "CARGO"):
+                if pede[etapa] and not self.d.get(CAMPO[etapa]):
+                    self.passo(etapa)
+                    return
+        self.passo("EXAMES")
+
+    def recebeu_ficha(self, texto: str) -> bool:
+        """A pessoa mandou vários dados de uma vez: guarda o que veio e pergunta só o que faltou."""
+        dados = ficha.ler(texto, hoje())
+        if not eh_ficha(dados):
+            return False
+        self.d.update(dados)
+        self.seguir()
+        return True
 
     def p_nome(self) -> None:
         self.d["_dica"] = "Mande o nome completo do paciente."
         self.diz("pedir_nome")
 
     def e_nome(self, texto: str):
+        if self.recebeu_ficha(texto):
+            return None
         nome = " ".join(texto.split())
-        if len(nome.split()) < 2 or any(c.isdigit() for c in nome) or len(nome) > 160:
+        if len(nome.split()) < 2 or any(c.isdigit() for c in nome) or len(nome) > 160 or "?" in nome:
             return NAO_ENTENDI
         self.d["nome"] = nome.title()
-        self.passo("CPF")
+        self.seguir()
 
     def p_cpf(self) -> None:
         self.d["_dica"] = "Mande o CPF com 11 números."
         self.diz("pedir_cpf")
 
     def e_cpf(self, texto: str):
+        if self.recebeu_ficha(texto):
+            return None
         problema = cpf_problema(texto)
         if problema:
             self.diz("cpf_invalido", problema=problema[0].upper() + problema[1:])
             return None
         self.d["cpf"] = so_digitos(texto)
-        self.passo("NASCIMENTO")
+        self.seguir()
 
     def p_nascimento(self) -> None:
         self.d["_dica"] = "Use dd/mm/aaaa."
@@ -531,23 +596,21 @@ class Bot:
         if nasc is None:
             self.diz("nascimento_invalido")
             return None
-        existente = self.s.scalar(select(Paciente).where(Paciente.cpf == self.d["cpf"]))
-        # CPF já cadastrado com outro nascimento segue a MESMA conversa de um CPF novo (senão o bot
-        # revelaria quem é paciente); a divergência vira marcador para a recepção conferir.
-        self.d["divergencia"] = bool(existente and existente.nascimento and existente.nascimento != nasc)
         self.d["nascimento"] = nasc.isoformat()
-        self.passo("RG" if self.d.get("exige") else "EXAMES")
+        self.seguir()
 
     def p_rg(self) -> None:
-        self.d["_dica"] = "Mande o número do RG."
+        self.d["_dica"] = "Mande o número do RG. Se não tiver em mãos, responda NÃO TENHO."
         self.diz("pedir_rg")
 
     def e_rg(self, texto: str):
         rg = "".join(c for c in texto if c.isalnum())
-        if not 5 <= len(rg) <= 14:
+        if it.nao_sabe(texto):
+            rg = SEM_RG  # segue sem o RG: a recepção pede no dia
+        elif not 5 <= len(rg) <= 14:
             return NAO_ENTENDI
         self.d["rg"] = rg.upper()
-        self.passo("SETOR")
+        self.seguir()
 
     def p_setor(self) -> None:
         self.d["_dica"] = "Escreva o setor em que a pessoa vai trabalhar."
@@ -557,17 +620,17 @@ class Bot:
         if len(texto.strip()) < 2:
             return NAO_ENTENDI
         self.d["setor"] = texto.strip()[:120]
-        self.passo("CARGO")
+        self.seguir()
 
     def p_cargo(self) -> None:
         self.d["_dica"] = "Escreva a função (cargo) da pessoa."
         self.diz("pedir_cargo")
 
     def e_cargo(self, texto: str):
-        if len(texto.strip()) < 2:
+        if len(texto.strip()) < 2 or "?" in texto or it.nao_sabe(texto):
             return NAO_ENTENDI
         self.d["cargo"] = texto.strip()[:120]
-        self.passo("EXAMES")
+        self.seguir()
 
     def _exames(self) -> list[Exame]:
         return list(self.s.scalars(select(Exame).where(Exame.ativo.is_(True)).order_by(Exame.ordem, Exame.id)))
@@ -716,7 +779,7 @@ class Bot:
             p.nascimento = date.fromisoformat(self.d["nascimento"])
             p.empresa_id = self.d.get("empresa_id") or p.empresa_id
             for campo in ("rg", "setor", "cargo"):
-                if self.d.get(campo):
+                if self.d.get(campo) and self.d[campo] != SEM_RG:
                     setattr(p, campo, self.d[campo])
         if self.contato.tipo == TipoContato.DESCONHECIDO and self.d.get("particular"):
             self.contato.tipo = TipoContato.PARTICULAR

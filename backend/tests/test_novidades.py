@@ -153,6 +153,9 @@ def test_cpf_ja_cadastrado_segue_a_mesma_conversa_e_vira_marcador():
 
 
 def test_cpf_nascimento_e_rg_nao_ficam_no_historico_nem_nos_dados():
+    with db.sessao() as s:
+        for chave in ("pedir_rg", "pedir_setor"):
+            s.get(parametros.Parametro, chave).valor = "true"
     f = Fala()
     f.diz("oi")
     f.diz("1")

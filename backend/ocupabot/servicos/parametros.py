@@ -25,6 +25,8 @@ PADROES: dict[str, tuple[str, str]] = {
         "Minutos de antecedência para o bot oferecer um horário (pedido às 15:45 não recebe 16:10). "
         "A equipe pode marcar em cima da hora pelo painel.",
     ),
+    "pedir_rg": ("false", "No admissional, o bot pede o RG (a pessoa pode responder que não tem em mãos)."),
+    "pedir_setor": ("false", "No admissional, o bot pede o setor em que a pessoa vai trabalhar."),
     "dias_lista_horarios": ("5", "Quantos dias com vaga o bot lista quando a sugestão é recusada."),
     "erros_ate_humano": ("3", "Mensagens não entendidas seguidas antes de chamar a equipe."),
     "fluxo_expira_horas": ("12", "Horas sem resposta para um fluxo largado recomeçar do menu."),
