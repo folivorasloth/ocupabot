@@ -22,7 +22,7 @@ from ...modelos import (
 from ...servicos import agenda, auditoria, contatos
 from ..crud import rotas_crud, serializar
 from ..deps import admin, equipe, qualquer, sessao, supervisao
-from ..esquemas import ExcecaoNova, GradeNova
+from ..esquemas import ContatoDaEmpresa, ExcecaoNova, GradeNova
 from .agenda import resumo
 
 
@@ -90,10 +90,26 @@ def _par(s: Session, c_id: int, e_id: int | None = None) -> tuple[Contato, Empre
     return c, e
 
 
+@r.post("/empresas/{e_id}/contatos", status_code=201, summary="Cadastra pela empresa quem agenda por ela")
+def contato_da_empresa(e_id: int, dados: ContatoDaEmpresa, s: Session = Depends(sessao),
+                       u: Usuario = Depends(equipe)):
+    e = s.get(Empresa, e_id) if e_id < 2**63 else None
+    if e is None:
+        raise HTTPException(404, "não encontrado")
+    if dados.telefone is None or dados.tipo not in AGENDA_PELA_EMPRESA:
+        raise HTTPException(422, "informe o WhatsApp e um tipo entre RH, CREDENCIADORA e CONTABILIDADE")
+    try:
+        return _quem(s, contatos.da_empresa(s, e, dados.telefone, dados.nome, dados.tipo, u.id))
+    except contatos.Desativado as erro:
+        raise HTTPException(409, str(erro)) from erro
+
+
 @r.put("/contatos/{c_id}/empresas/{e_id}", summary="Liga o contato à empresa (confirma quem agenda por ela)")
 def vincular(c_id: int, e_id: int, tipo: TipoContato | None = None, s: Session = Depends(sessao),
              u: Usuario = Depends(equipe)):
     c, e = _par(s, c_id, e_id)
+    if not c.ativo:
+        raise HTTPException(409, "este contato está desativado: reative antes de ligar a uma empresa")
     novo_tipo = tipo or (c.tipo if c.tipo in AGENDA_PELA_EMPRESA else TipoContato.RH)
     if novo_tipo not in AGENDA_PELA_EMPRESA:
         raise HTTPException(422, "tipo inválido: use RH, CREDENCIADORA ou CONTABILIDADE")

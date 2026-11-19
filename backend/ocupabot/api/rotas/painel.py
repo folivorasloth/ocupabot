@@ -37,27 +37,47 @@ def _plural(n: int, um: str, varios: str) -> str:
     return f"{n} {um if n == 1 else varios}"
 
 
+def _pcmso(e: Empresa, dias: int) -> dict:
+    """Situação do PCMSO de uma empresa. `a_cobrar`: vencido, vencendo ou documento que ainda não chegou."""
+    vencido = e.pcmso_vence_em is not None and e.pcmso_vence_em < hoje()
+    vence = e.pcmso_vence_em is not None and not vencido and e.pcmso_vence_em <= hoje() + timedelta(days=dias)
+    sem_documento = e.pcmso_elaborado_por == PcmsoElaboradoPor.TERCEIRO and not e.pcmso_recebido
+    if e.pcmso_elaborado_por is None:
+        situacao = "NAO_ACOMPANHADO"
+    else:
+        situacao = "VENCIDO" if vencido else "NAO_RECEBIDO" if sem_documento else "VENCE" if vence else "EM_DIA"
+    return {"id": e.id, "nome": e.nome_fantasia or e.razao_social, "cnpj": e.cnpj,
+            "elaborado_por": e.pcmso_elaborado_por and e.pcmso_elaborado_por.value,
+            "vence_em": e.pcmso_vence_em and e.pcmso_vence_em.isoformat(), "recebido": e.pcmso_recebido,
+            "situacao": situacao, "vencido": vencido, "vence": vence, "sem_documento": sem_documento,
+            "a_cobrar": e.pcmso_elaborado_por is not None and (vencido or vence or sem_documento)}
+
+
+@r.get("/painel/pcmso", summary="Situação do PCMSO de todas as empresas ativas")
+def pcmso(s: Session = Depends(sessao), _: Usuario = Depends(qualquer)):
+    dias = parametros.inteiro(s, "pcmso_alerta_dias")
+    empresas = s.scalars(select(Empresa).where(Empresa.ativa.is_(True)).order_by(Empresa.razao_social))
+    return {"alerta_dias": dias, "empresas": [_pcmso(e, dias) for e in empresas]}
+
+
 def _alertas_pcmso(s: Session) -> list[dict]:
     """PCMSO das empresas acompanhadas (quem fez preenchido): vencido, vencendo e, quando outra empresa
     elaborou, documento em vigor que não chegou. Só avisa: a recepção cobra."""
     dias = parametros.inteiro(s, "pcmso_alerta_dias")
-    vencido = vencendo = sem_documento = 0
-    for e in s.scalars(select(Empresa).where(Empresa.ativa.is_(True), Empresa.pcmso_elaborado_por.is_not(None))):
-        if e.pcmso_vence_em is not None and e.pcmso_vence_em < hoje():
-            vencido += 1
-        elif e.pcmso_vence_em is not None and e.pcmso_vence_em <= hoje() + timedelta(days=dias):
-            vencendo += 1
-        if e.pcmso_elaborado_por == PcmsoElaboradoPor.TERCEIRO and not e.pcmso_recebido:
-            sem_documento += 1
+    linhas = [_pcmso(e, dias) for e in s.scalars(
+        select(Empresa).where(Empresa.ativa.is_(True), Empresa.pcmso_elaborado_por.is_not(None)))]
+    vencido, vencendo = sum(x["vencido"] for x in linhas), sum(x["vence"] for x in linhas)
+    sem_documento = sum(x["sem_documento"] for x in linhas)
+    para = "/cadastros?aba=pcmso"
     saida = []
     if vencido:
-        saida.append({"nivel": "erro", "para": "/cadastros", "texto":
+        saida.append({"nivel": "erro", "para": para, "texto":
                       f"{_plural(vencido, 'empresa', 'empresas')} com PCMSO vencido: peça o documento novo."})
     if vencendo:
-        saida.append({"nivel": "aviso", "para": "/cadastros", "texto":
+        saida.append({"nivel": "aviso", "para": para, "texto":
                       f"{_plural(vencendo, 'empresa', 'empresas')} com PCMSO vencendo nos próximos {dias} dias."})
     if sem_documento:
-        saida.append({"nivel": "aviso", "para": "/cadastros", "texto":
+        saida.append({"nivel": "aviso", "para": para, "texto":
                       f"{_plural(sem_documento, 'empresa ainda não mandou', 'empresas ainda não mandaram')} "
                       "o PCMSO em vigor."})
     return saida
@@ -68,7 +88,7 @@ def _atrasados(s: Session) -> int:
     if limite.date() < hoje():  # logo depois da meia-noite ninguém de hoje está atrasado
         return 0
     return s.scalar(select(func.count(Agendamento.id)).where(
-        Agendamento.data == hoje(), Agendamento.status.in_(STATUS_ATIVOS),
+        Agendamento.data == hoje(), Agendamento.status.in_(STATUS_ATIVOS), Agendamento.teste.is_(False),
         Agendamento.horario <= limite.time())) or 0
 
 

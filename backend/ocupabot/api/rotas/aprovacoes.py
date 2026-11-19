@@ -42,14 +42,14 @@ def _executar(fn):
 @r.post("/{ap_id}/aprovar", summary="Aprova o pedido como veio; a resposta ao contato sai pelo worker")
 def aprovar(ap_id: int, s: Session = Depends(sessao), u: Usuario = Depends(equipe)):
     ap = _ap(s, ap_id)
-    _executar(lambda: aprovacoes.aprovar(s, ap, u.id, u.perfil))
+    _executar(lambda: aprovacoes.aprovar(s, ap, u.id, u.perfil, u.pode_externo))
     return aprovacao_resumo(s, ap)
 
 
 @r.post("/{ap_id}/propor", summary="Propõe outro horário: a vaga fica segura e a pessoa responde 1 ou 2")
 def propor(ap_id: int, dados: Remarcar, s: Session = Depends(sessao), u: Usuario = Depends(equipe)):
     ap = _ap(s, ap_id)
-    _executar(lambda: aprovacoes.propor(s, ap, u.id, u.perfil, dados.data, dados.horario))
+    _executar(lambda: aprovacoes.propor(s, ap, u.id, u.perfil, dados.data, dados.horario, u.pode_externo))
     return aprovacao_resumo(s, ap)
 
 

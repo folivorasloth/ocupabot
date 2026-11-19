@@ -12,7 +12,7 @@ from ...modelos import Usuario
 from ...seguranca import SESSAO_HORAS, conferir_senha, criar_token, hash_senha, problema_senha
 from ...servicos import auditoria
 from ..crud import serializar
-from ..deps import COOKIE, admin, ip, qualquer, sessao
+from ..deps import COOKIE, ip, qualquer, sessao, supervisao
 from ..esquemas import Login, TrocarSenha, UsuarioAlterar, UsuarioNovo
 
 r = APIRouter(tags=["acesso"])
@@ -93,9 +93,19 @@ def trocar_senha(dados: TrocarSenha, request: Request, response: Response, s: Se
     return serializar(u)
 
 
+# A Supervisão abre Usuários, mas só enxerga e mexe em quem é da Recepção: cria, bloqueia, define a senha
+# provisória e libera, pessoa a pessoa, mexer no que já está no sistema externo. Supervisão e admin, só o admin.
+def _so_recepcao(u: Usuario, perfil: Perfil | None) -> None:
+    if u.perfil != Perfil.ADMIN and perfil != Perfil.RECEPCAO:
+        raise HTTPException(403, "a Supervisão só cria e altera usuários da Recepção")
+
+
 @r.get("/usuarios")
-def listar(s: Session = Depends(sessao), _: Usuario = Depends(admin)):
-    return [serializar(u) for u in s.scalars(select(Usuario).order_by(Usuario.nome))]
+def listar(s: Session = Depends(sessao), u: Usuario = Depends(supervisao)):
+    consulta = select(Usuario).order_by(Usuario.nome)
+    if u.perfil != Perfil.ADMIN:
+        consulta = consulta.where(Usuario.perfil == Perfil.RECEPCAO)
+    return [serializar(x) for x in s.scalars(consulta)]
 
 
 def _gravar(s: Session) -> None:
@@ -106,10 +116,11 @@ def _gravar(s: Session) -> None:
 
 
 @r.post("/usuarios", status_code=201)
-def criar(dados: UsuarioNovo, request: Request, s: Session = Depends(sessao), u: Usuario = Depends(admin)):
-    # a senha foi escolhida pelo admin: a pessoa troca no primeiro acesso
+def criar(dados: UsuarioNovo, request: Request, s: Session = Depends(sessao), u: Usuario = Depends(supervisao)):
+    _so_recepcao(u, dados.perfil)
+    # a senha foi escolhida por outra pessoa: quem recebe troca no primeiro acesso
     novo = Usuario(nome=dados.nome, login=dados.login, perfil=dados.perfil, senha_hash=hash_senha(dados.senha),
-                   whatsapp=dados.whatsapp, trocar_senha=True)
+                   whatsapp=dados.whatsapp, trocar_senha=True, pode_externo=dados.pode_externo)
     s.add(novo)
     _gravar(s)
     auditoria.registrar(s, "usuario", novo.id, "criar", None, auditoria.foto(novo), u.id, "painel", ip(request))
@@ -123,10 +134,12 @@ def _outro_admin_ativo(s: Session, alvo: Usuario) -> bool:
 
 @r.patch("/usuarios/{usuario_id}")
 def alterar(usuario_id: int, dados: UsuarioAlterar, request: Request, s: Session = Depends(sessao),
-            u: Usuario = Depends(admin)):
+            u: Usuario = Depends(supervisao)):
     alvo = s.get(Usuario, usuario_id) if usuario_id < 2**63 else None
-    if alvo is None:
-        raise HTTPException(404, "não encontrado")
+    if alvo is None or (u.perfil != Perfil.ADMIN and alvo.perfil != Perfil.RECEPCAO):
+        raise HTTPException(404, "não encontrado")  # a Supervisão nem enxerga Supervisão e admin
+    if dados.perfil is not None:
+        _so_recepcao(u, dados.perfil)
     antes = auditoria.foto(alvo)
     deixa_de_ser_admin = alvo.perfil == Perfil.ADMIN and alvo.ativo and (
         dados.ativo is False or (dados.perfil is not None and dados.perfil != Perfil.ADMIN))
@@ -140,6 +153,8 @@ def alterar(usuario_id: int, dados: UsuarioAlterar, request: Request, s: Session
         alvo.ativo = dados.ativo
     if "whatsapp" in dados.model_fields_set:
         alvo.whatsapp = dados.whatsapp
+    if dados.pode_externo is not None:
+        alvo.pode_externo = dados.pode_externo
     if dados.senha:
         if alvo.id == u.id:
             raise HTTPException(422, "para trocar a sua própria senha use 'Trocar senha' no menu da conta")

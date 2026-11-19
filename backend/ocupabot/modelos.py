@@ -56,6 +56,11 @@ class Usuario(ComDatas, Base):
     trocar_senha: Mapped[bool] = mapped_column(Boolean, default=False)  # senha dada por outra pessoa
     # Número de quem é da equipe: mensagens dele podem ser comandos (presença, falta, agenda...)
     whatsapp: Mapped[str | None] = mapped_column(String(20), unique=True, index=True)
+    # Permissão por pessoa: quem é da Recepção e pode remarcar e cancelar o que já está no sistema externo
+    pode_externo: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    def mexe_no_externo(self) -> bool:
+        return self.perfil in (Perfil.ADMIN, Perfil.SUPERVISAO) or bool(self.pode_externo)
 
 
 class Auditoria(Base):
@@ -114,6 +119,8 @@ class Contato(ComDatas, Base):
     tipo: Mapped[TipoContato] = mapped_column(_enum(TipoContato), default=TipoContato.DESCONHECIDO)
     empresa_id: Mapped[int | None] = mapped_column(ForeignKey("empresas.id"))
     optout_em: Mapped[datetime | None] = mapped_column(DateTime)
+    # Desativado: sai das listas de quem agenda e o bot o trata como um número qualquer. Nada é apagado.
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
 
     empresa: Mapped[Empresa | None] = relationship()
     vinculos: Mapped[list["ContatoEmpresa"]] = relationship(cascade="all, delete-orphan")
@@ -245,6 +252,8 @@ class Agendamento(ComDatas, Base):
     observacao: Mapped[str | None] = mapped_column(Text)
     no_sistema_externo: Mapped[bool] = mapped_column(Boolean, default=False)
     codigo_externo: Mapped[str | None] = mapped_column(String(40))
+    # Agendamento de teste (paciente "TESTE ..."): ocupa a vaga, mas não manda mensagem nem conta nos números
+    teste: Mapped[bool] = mapped_column(Boolean, default=False)
 
     paciente: Mapped[Paciente] = relationship()
     empresa: Mapped[Empresa | None] = relationship()
